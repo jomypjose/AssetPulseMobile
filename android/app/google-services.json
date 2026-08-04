@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "471245065166",
+    "project_id": "assetpulse-alerter",
+    "storage_bucket": "assetpulse-alerter.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:471245065166:android:b9b9f0419b0f2d5206f99f",
+        "android_client_info": {
+          "package_name": "com.assetpulse.monitor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWMhLvdO6JEUayZqnrIjTLk_Paac5z4O0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

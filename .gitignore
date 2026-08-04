@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native builds
+android/build/
+android/app/build/
+android/.gradle/
+android/app/.cxx/
+ios/build/
+ios/Pods/
+*.xcworkspace/xcuserdata/
+
+# Secrets & signing — these live on disk but must never be committed
+.env
+.env.local
+android/gradle.properties
+# google-services.json is tracked here because it was tracked in the monorepo
+# and the Android build needs it. It is Firebase *client* config (project id,
+# app id, client key) — not a server secret — but review before making this
+# repo public.
+# android/app/google-services.json
+ios/GoogleService-Info.plist
+*.keystore
+*.jks
+!android/app/debug.keystore
+
+# Logs / OS
+*.log
+npm-debug.*
+yarn-debug.*
+.DS_Store
