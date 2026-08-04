@@ -243,6 +243,7 @@ const MapScreen = ({ navigation }) => {
 
         {!loading && !error && !!WebView && (
           <WebView
+            key={isDark ? 'dark' : 'light'}
             ref={webViewRef}
             source={{ html }}
             style={styles.webView}

@@ -11,7 +11,8 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { getJobs, createJob, closeJob } from '../services/api';
-import { themed, C, R, S, cardShadow, elevation, CHROME } from '../theme';
+import FadeIn from '../components/FadeIn';
+import { themed, C, R, S, cardShadow, elevation, CHROME, BACKDROP } from '../theme';
 
 const JOB_TYPES = ['Hardware', 'Software', 'Network', 'Logistics', 'Other'];
 
@@ -311,10 +312,12 @@ const DailyJobsScreen = ({ navigation }) => {
         </View>
       ) : jobs.length === 0 ? (
         <View style={styles.centered}>
-          <ClipboardList color={C.textDim} size={40} />
-          <Text style={styles.emptyText}>No jobs on this date.</Text>
+          <ClipboardList color={C.textDim} size={44} strokeWidth={1.1} />
+          <Text style={styles.emptyText}>No jobs on this date</Text>
+          <Text style={styles.emptySub}>Try a different date, or pull down to refresh.</Text>
         </View>
       ) : (
+        <FadeIn style={{ flex: 1 }}>
         <FlatList
           data={jobs}
           keyExtractor={(j) => String(j.id)}
@@ -325,6 +328,7 @@ const DailyJobsScreen = ({ navigation }) => {
             <RefreshControl refreshing={refreshing} onRefresh={() => fetchJobs(true)} tintColor={C.primary} colors={[C.primary]} />
           }
         />
+        </FadeIn>
       )}
 
       <SolutionModal
@@ -375,8 +379,9 @@ const styles = themed(() => ({
   dateText: { fontSize: 14, fontWeight: '700', color: C.text },
   dateNav:  { fontSize: 12, color: C.primary, fontWeight: '700' },
 
-  centered:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
-  emptyText: { color: C.textMuted, fontSize: 13 },
+  centered:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.sm, paddingHorizontal: S.xxxl },
+  emptyText: { color: C.textMuted, fontSize: 16, fontWeight: '600', marginTop: S.sm },
+  emptySub:  { color: C.textDim, fontSize: 13, textAlign: 'center' },
 
   card: {
     flexDirection: 'row', borderRadius: R.lg, overflow: 'hidden',
@@ -406,7 +411,7 @@ const styles = themed(() => ({
   },
   closeText: { color: C.white, fontSize: 12, fontWeight: '700' },
 
-  modalBackdrop: { flex: 1, backgroundColor: '#000a', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: BACKDROP, justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: C.bg,
     borderTopLeftRadius: R.xxl, borderTopRightRadius: R.xxl,

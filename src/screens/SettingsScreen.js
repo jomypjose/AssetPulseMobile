@@ -320,7 +320,7 @@ const SettingsScreen = ({ navigation }) => {
               <Switch
                 value={bioEnabled}
                 onValueChange={onToggleBio}
-                thumbColor={bioEnabled ? C.primary : '#888'}
+                thumbColor={bioEnabled ? C.primary : C.textMuted}
                 trackColor={{ false: C.cardAlt, true: `${C.primary}55` }}
               />
             </View>

@@ -57,11 +57,15 @@ const logo = themed(() => ({
 }));
 
 // ─── Normalise URL ─────────────────────────────────────────────────────────────
+// Always resolves to https:// — credentials and bearer tokens go to this
+// address on every request, so plaintext http:// is never allowed, even if
+// the user explicitly types it (would otherwise let a spoofed/MITM host on
+// the same network harvest a login in cleartext).
 const normaliseUrl = (raw) => {
   let url = raw.trim().replace(/\/+$/, '');          // strip trailing slashes
   if (!url) return null;
-  // If no protocol given, default to https
-  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  if (/^http:\/\//i.test(url)) url = url.replace(/^http:\/\//i, 'https://');
+  else if (!/^https:\/\//i.test(url)) url = `https://${url}`;
   // Append /api if not already present
   if (!/\/api\/?$/.test(url)) url = `${url}/api`;
   return url;
@@ -92,8 +96,9 @@ const ServerSetupScreen = () => {
     const url = normaliseUrl(input);
     if (!url) { shake(); setStatus('error'); setMessage('Enter a valid server address.'); return; }
 
+    const wasPlaintext = /^http:\/\//i.test(input.trim());
     setStatus('verifying');
-    setMessage('');
+    setMessage(wasPlaintext ? 'Upgraded to HTTPS — plain HTTP isn’t supported.' : '');
     setResolved(url);
 
     try {

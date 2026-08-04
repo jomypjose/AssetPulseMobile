@@ -34,3 +34,6 @@ ios/GoogleService-Info.plist
 npm-debug.*
 yarn-debug.*
 .DS_Store
+
+# Kotlin incremental-build cache
+android/.kotlin/

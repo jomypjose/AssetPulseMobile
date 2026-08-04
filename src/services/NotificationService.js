@@ -1,11 +1,12 @@
 /**
- * NotificationService — local push notifications for alerts and messages.
+ * NotificationService — local push notifications for messages.
+ * (Alert push is sent server-side; see navigation/index.js.)
  *
  * Flow:
  *  1. Call `init()` once on app start.
- *  2. Call `seedAlerts` / `seedMessages` on the first poll so we don't replay
- *     existing items as "new".
- *  3. Call `checkAlerts` / `checkMessages` on every subsequent poll.
+ *  2. Call `seedMessages` on the first poll so we don't replay existing
+ *     items as "new".
+ *  3. Call `checkMessages` on every subsequent poll.
  *  4. Call `addTapListener` to navigate when a notification is tapped.
  */
 
@@ -17,7 +18,6 @@ try {
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let _seenAlertIds  = new Set();   // alert ids already notified
 let _seenMsgMap    = {};          // { userId: last_message_id }  ← id, not time
 let _permGranted   = false;
 let _initialised   = false;
@@ -106,12 +106,6 @@ export const init = async () => {
 
 // ─── Seed (call on first poll to avoid false-firing for existing data) ────────
 
-export const seedAlerts = (alerts = []) => {
-  alerts
-    .filter((a) => !a.is_acknowledged && ['critical','warning'].includes(a.severity))
-    .forEach((a) => _seenAlertIds.add(String(a.id)));
-};
-
 export const seedMessages = (conversations = [], myUserId) => {
   const me = String(myUserId ?? '');
   conversations.forEach((c) => {
@@ -119,65 +113,6 @@ export const seedMessages = (conversations = [], myUserId) => {
     const uid = String(c.user_id ?? c.other_user_id ?? '');
     if (uid) _seenMsgMap[uid] = String(c.id ?? '');
   });
-};
-
-// ─── Alert notifications ──────────────────────────────────────────────────────
-
-export const checkAlerts = async (alerts = []) => {
-  if (!N || !_permGranted) return;
-
-  const active = alerts.filter(
-    (a) => !a.is_acknowledged && ['critical','warning'].includes(a.severity),
-  );
-  const newOnes = active.filter((a) => !_seenAlertIds.has(String(a.id)));
-  if (!newOnes.length) {
-    // Refresh seen set (remove resolved/acked)
-    _seenAlertIds = new Set(active.map((a) => String(a.id)));
-    return;
-  }
-
-  active.forEach((a) => _seenAlertIds.add(String(a.id)));
-
-  if (newOnes.length === 1) {
-    const a = newOnes[0];
-    // Build a "which device" label from whatever the alert payload has.
-    // device_name + device_ip is the friendliest; fall back gracefully so
-    // the notification is never just "Critical Alert" with no identifier.
-    const device = [a.device_name, a.device_ip].filter(Boolean).join(' · ')
-                || a.sys_name
-                || a.host
-                || a.ip_address;
-    const icon  = a.severity === 'critical' ? '🔴' : '🟡';
-    const title = device
-      ? `${icon} ${_cap(a.severity)}: ${device}`
-      : `${icon} ${_cap(a.severity)} Alert`;
-    await _send('alerts', {
-      title,
-      body:  a.message || 'A monitored device needs attention.',
-      data:  { screen: 'Alerts', alertId: a.id, kind: 'alert' },
-      badge: active.length,
-      categoryIdentifier: 'alert-actions',
-    });
-  } else {
-    const crit = newOnes.filter((a) => a.severity === 'critical').length;
-    // For the grouped notification, include up to three device names so the
-    // user can see "which" without opening the app.
-    const devices = newOnes
-      .map((a) => a.device_name || a.device_ip || a.sys_name)
-      .filter(Boolean);
-    const summary = devices.length
-      ? (devices.length <= 3
-          ? devices.join(', ')
-          : `${devices.slice(0, 3).join(', ')} +${devices.length - 3} more`)
-      : `${crit} critical, ${newOnes.length - crit} warning`;
-    await _send('alerts', {
-      title: `⚠️ ${newOnes.length} New Alerts`,
-      body:  summary,
-      data:  { screen: 'Alerts', kind: 'alert-group' },
-      badge: active.length,
-      categoryIdentifier: 'alert-actions',
-    });
-  }
 };
 
 // ─── Message notifications ────────────────────────────────────────────────────
@@ -287,5 +222,3 @@ const _send = async (channelId, { title, body, data, badge, categoryIdentifier }
     console.warn('[NotificationService] _send error:', err?.message);
   }
 };
-
-const _cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';

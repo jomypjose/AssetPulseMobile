@@ -33,6 +33,7 @@ import SearchScreen        from '../screens/SearchScreen';
 import BranchesScreen      from '../screens/BranchesScreen';
 import BranchDetailScreen     from '../screens/BranchDetailScreen';
 import BranchAssetsListScreen from '../screens/BranchAssetsListScreen';
+import AssetDetailScreen      from '../screens/AssetDetailScreen';
 import ExpiryScreen           from '../screens/ExpiryScreen';
 
 // Icons
@@ -59,6 +60,7 @@ const DashboardNavigator = () => (
     <DashboardStack.Screen name="Branches"      component={BranchesScreen} />
     <DashboardStack.Screen name="BranchDetail"  component={BranchDetailScreen} />
     <DashboardStack.Screen name="BranchAssetsList" component={BranchAssetsListScreen} />
+    <DashboardStack.Screen name="AssetDetail"   component={AssetDetailScreen} />
     <DashboardStack.Screen name="Expiry"        component={ExpiryScreen} />
     <DashboardStack.Screen name="DeviceDetail"  component={DeviceDetailScreen} />
   </DashboardStack.Navigator>
@@ -91,6 +93,7 @@ const ProfileNavigator = () => (
     <ProfileStack.Screen name="Branches"    component={BranchesScreen} />
     <ProfileStack.Screen name="BranchDetail" component={BranchDetailScreen} />
     <ProfileStack.Screen name="BranchAssetsList" component={BranchAssetsListScreen} />
+    <ProfileStack.Screen name="AssetDetail" component={AssetDetailScreen} />
     <ProfileStack.Screen name="Expiry"      component={ExpiryScreen} />
     <ProfileStack.Screen name="DeviceDetail" component={DeviceDetailScreen} />
   </ProfileStack.Navigator>

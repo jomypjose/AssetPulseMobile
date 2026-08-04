@@ -14,7 +14,8 @@ import {
   getConversations, getMessageUsersList, markMessageRead,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { themed, C, R, S, cardShadow, CHROME } from '../theme';
+import FadeIn from '../components/FadeIn';
+import { themed, C, R, S, cardShadow, CHROME, DANGER_TEXT } from '../theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const initials = (name) => {
@@ -347,6 +348,7 @@ const MessagingScreen = ({ navigation }) => {
           <Text style={styles.loadingText}>Loading messages…</Text>
         </View>
       ) : (
+        <FadeIn style={{ flex: 1 }}>
         <FlatList
           data={filtered}
           renderItem={renderItem}
@@ -371,6 +373,7 @@ const MessagingScreen = ({ navigation }) => {
             </View>
           }
         />
+        </FadeIn>
       )}
 
       {/* ── New chat modal ── */}
@@ -419,7 +422,7 @@ const styles = themed(() => ({
     borderRadius: R.sm, padding: S.md,
     borderLeftWidth: 3, borderLeftColor: C.offline,
   },
-  errorText: { color: '#fca5a5', fontSize: 13 },
+  errorText: { color: DANGER_TEXT, fontSize: 13 },
 
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
   loadingText:  { color: C.textDim, fontSize: 14 },

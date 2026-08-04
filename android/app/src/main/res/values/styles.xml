@@ -4,6 +4,16 @@
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#080d17</item>
+    <!--
+      The app renders its OWN light/dark theme in JS (ThemeContext), chosen by
+      the user independently of the OS setting. Without this, Android 10+'s
+      "Force Dark" heuristic repaints native views to dark whenever the SYSTEM
+      is in dark mode — even when the app has deliberately chosen its light
+      palette — while WebView content (e.g. the Leaflet map) is left alone,
+      producing a broken half-dark/half-light UI. Disabling it lets the app's
+      actual chosen colors render everywhere, consistently.
+    -->
+    <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
   </style>
   <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
     <item name="windowSplashScreenBackground">@color/splashscreen_background</item>

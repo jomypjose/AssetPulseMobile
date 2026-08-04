@@ -16,7 +16,7 @@ import {
 import StatusBadge from '../components/StatusBadge';
 import CircularGauge from '../components/CircularGauge';
 import Sparkline from '../components/Sparkline';
-import { themed, C, R, S, cardShadow, CHROME } from '../theme';
+import { themed, C, R, S, cardShadow, CHROME, DANGER_TEXT } from '../theme';
 
 let ImagePicker = null;
 try { ImagePicker = require('expo-image-picker'); } catch (_) {}
@@ -263,11 +263,8 @@ const DeviceDetailScreen = ({ route, navigation }) => {
           {/* ── Quick actions ── */}
           <SectionLabel title="Actions" />
           <View style={styles.actionsRow}>
-            <TouchableOpacity
+            <View
               style={[styles.actionTile, inMaintenance && { borderColor: C.warning, backgroundColor: C.warningBg }]}
-              onPress={toggleMaintenance}
-              activeOpacity={0.85}
-              disabled={maintBusy}
             >
               <Wrench color={inMaintenance ? C.warning : C.text} size={18} />
               <Text style={[styles.actionLabel, inMaintenance && { color: C.warning }]}>
@@ -277,10 +274,10 @@ const DeviceDetailScreen = ({ route, navigation }) => {
                 value={inMaintenance}
                 onValueChange={toggleMaintenance}
                 disabled={maintBusy}
-                thumbColor={inMaintenance ? C.warning : '#888'}
+                thumbColor={inMaintenance ? C.warning : C.textMuted}
                 trackColor={{ false: C.cardAlt, true: `${C.warning}55` }}
               />
-            </TouchableOpacity>
+            </View>
 
           </View>
 
@@ -329,7 +326,7 @@ const styles = themed(() => ({
     borderLeftWidth: 3, borderLeftColor: C.offline,
     maxWidth: '80%',
   },
-  errorText: { color: '#fca5a5', fontSize: 13 },
+  errorText: { color: DANGER_TEXT, fontSize: 13 },
   retryBtn:  {
     paddingHorizontal: S.xxl, paddingVertical: S.sm,
     backgroundColor: C.primaryBg,

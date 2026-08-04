@@ -11,9 +11,10 @@ import {
   Clock, WifiOff, AlertTriangle,
 } from 'lucide-react-native';
 import PulseLogo from '../components/PulseLogo';
+import StaleBanner from '../components/StaleBanner';
 import { getDevices } from '../services/api';
 import { POLL_INTERVAL } from '../config';
-import { themed, C, R, S, elevation, CHROME } from '../theme';
+import { themed, C, R, S, elevation, CHROME, DANGER_TEXT } from '../theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 // PulseLogo wrapper sized like a lucide icon (accepts color + size props)
@@ -240,6 +241,7 @@ const DevicesScreen = () => {
   const [error,        setError]        = useState('');
   const [query,        setQuery]        = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
+  const [cachedAt,     setCachedAt]     = useState(null);   // set when data.fromCache
 
   const fetchDevices = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
@@ -247,6 +249,7 @@ const DevicesScreen = () => {
     try {
       const data = await getDevices();
       setDevices(data.assets || []);
+      setCachedAt(data.fromCache ? data.cachedAt : null);
     } catch (err) {
       setError(err.message || 'Failed to load devices.');
     } finally {
@@ -417,6 +420,8 @@ const DevicesScreen = () => {
         </View>
       )}
 
+      {!!cachedAt && <StaleBanner cachedAt={cachedAt} />}
+
       {/* ── List ── */}
       {isLoading ? (
         <View style={styles.loadingState}>
@@ -498,7 +503,7 @@ const styles = themed(() => ({
     borderRadius: R.md, padding: S.md,
     borderLeftWidth: 3, borderLeftColor: C.offline,
   },
-  errorText: { color: '#fca5a5', fontSize: 13 },
+  errorText: { color: DANGER_TEXT, fontSize: 13 },
 
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
   loadingText:  { color: C.textMuted, fontSize: 14 },

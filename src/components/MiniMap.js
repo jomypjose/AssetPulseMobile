@@ -78,6 +78,7 @@ const MiniMap = ({ height = 220, style, isDark = true, onPress }) => {
 
         {!loading && !error && (
           <WebView
+            key={isDark ? 'dark' : 'light'}
             source={{ html }}
             style={styles.webView}
             scrollEnabled={false}

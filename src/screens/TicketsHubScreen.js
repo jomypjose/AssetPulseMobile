@@ -21,7 +21,8 @@ import {
   getChangeRequests, getChangeRequestSummary, createChangeRequest, reviewChangeRequest,
   approveChangeRequest, implementChangeRequest, cancelChangeRequest,
 } from '../services/api';
-import { themed, C, R, S, cardShadow, elevation, CHROME } from '../theme';
+import FadeIn from '../components/FadeIn';
+import { themed, C, R, S, cardShadow, elevation, CHROME, BACKDROP } from '../theme';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -777,10 +778,12 @@ const TicketsHubScreen = ({ navigation }) => {
         <View style={styles.centered}><ActivityIndicator color={C.primary} size="large" /></View>
       ) : data.length === 0 ? (
         <View style={styles.centered}>
-          <AlertTriangle color={C.textDim} size={38} />
-          <Text style={styles.emptyText}>No {TABS.find((t) => t.key === tab)?.label.toLowerCase()} tickets yet.</Text>
+          <AlertTriangle color={C.textDim} size={44} strokeWidth={1.1} />
+          <Text style={styles.emptyText}>No {TABS.find((t) => t.key === tab)?.label.toLowerCase()} tickets</Text>
+          <Text style={styles.emptySub}>New tickets in this category will show up here.</Text>
         </View>
       ) : (
+        <FadeIn style={{ flex: 1 }}>
         <FlatList
           data={data}
           keyExtractor={(item) => `${tab}-${item.id}`}
@@ -789,6 +792,7 @@ const TicketsHubScreen = ({ navigation }) => {
           ItemSeparatorComponent={() => <View style={{ height: S.sm }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAll(true)} tintColor={C.primary} colors={[C.primary]} />}
         />
+        </FadeIn>
       )}
 
       {/* Detail */}
@@ -859,8 +863,9 @@ const styles = themed(() => ({
   tabBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: R.full, backgroundColor: C.offlineBg, minWidth: 18, alignItems: 'center' },
   tabBadgeText: { fontSize: 10, fontWeight: '700', color: C.offline },
 
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
-  emptyText: { color: C.textMuted, fontSize: 13 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.sm, paddingHorizontal: S.xxxl },
+  emptyText: { color: C.textMuted, fontSize: 16, fontWeight: '600', marginTop: S.sm },
+  emptySub:  { color: C.textDim, fontSize: 13, textAlign: 'center' },
 
   card: {
     flexDirection: 'row', borderRadius: R.lg, overflow: 'hidden',
@@ -881,7 +886,7 @@ const styles = themed(() => ({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
   meta: { fontSize: 11, color: C.textDim },
 
-  modalBackdrop: { flex: 1, backgroundColor: '#000a', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: BACKDROP, justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: C.bg, borderTopLeftRadius: R.xxl, borderTopRightRadius: R.xxl,
     padding: S.lg, gap: S.md,

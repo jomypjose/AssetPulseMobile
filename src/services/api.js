@@ -1,7 +1,11 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TOKEN_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY, SERVER_URL_KEY } from '../config';
+import { SERVER_URL_KEY } from '../config';
 import { cacheSet, cacheGet } from './OfflineCache';
+import {
+  getToken, setToken as setStoredToken,
+  getRefreshToken, setRefreshToken as setStoredRefreshToken,
+} from './tokenStorage';
 
 // Tiny pub/sub so AuthContext can react to "session genuinely expired"
 // without circular imports. Listeners receive no arguments.
@@ -112,7 +116,7 @@ const isTokenExpiringSoon = (token) => {
 let refreshPromise = null;
 
 const performRefresh = async () => {
-  const stored = await AsyncStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  const stored = await getRefreshToken();
   // Legacy sessions (saved before refresh tokens were wired in) or a wiped
   // refresh token can't be renewed — surface a clean error, no logout.
   if (!stored) throw new Error('No refresh token available');
@@ -120,8 +124,8 @@ const performRefresh = async () => {
   const res = await axios.post(`${baseURL}/auth/refresh`, { refreshToken: stored }, { timeout: 15000 });
   const { token: newToken, refreshToken: newRefresh } = res.data || {};
   if (!newToken) throw new Error('Refresh response missing token');
-  await AsyncStorage.setItem(TOKEN_STORAGE_KEY, newToken);
-  if (newRefresh) await AsyncStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, newRefresh);
+  await setStoredToken(newToken);
+  if (newRefresh) await setStoredRefreshToken(newRefresh);
   return newToken;
 };
 
@@ -139,13 +143,13 @@ api.interceptors.request.use(
     const url = config.url || '';
     const isAuthCall = url.includes('/auth/login') || url.includes('/auth/refresh');
     try {
-      let token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      let token = await getToken();
 
       // If the access token is expired / about to expire, trade the refresh
       // token in for a fresh one *before* sending — so the request doesn't
       // bounce with "Access token expired". Only when a refresh token exists.
       if (!isAuthCall && token && isTokenExpiringSoon(token)) {
-        const hasRefresh = await AsyncStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+        const hasRefresh = await getRefreshToken();
         if (hasRefresh) {
           try {
             token = await refreshAccessToken();
@@ -332,7 +336,7 @@ export const sendDirectMessage = async (recipientId, message, subject = '') => {
 export const sendMessageWithAttachment = async (recipientId, message, file, subject = '') => {
   // Use native fetch for multipart — axios on React Native interferes with the
   // auto-generated multipart boundary when Content-Type is set manually.
-  const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+  const token = await getToken();
   const baseURL = api.defaults.baseURL;
 
   const formData = new FormData();
@@ -398,13 +402,32 @@ export const getProfile = async () => {
 
 // ─── Branch Map ───────────────────────────────────────────────────────────────
 
+// MiniMap (Dashboard) and MapScreen both call getBranchMapData() on mount,
+// often within moments of each other (open Dashboard → tap into full map).
+// Share one in-flight request plus a short-lived cache so that doesn't turn
+// into two full network round-trips for identical data.
+const BRANCH_MAP_CACHE_MS = 20000;
+let branchMapPromise = null;
+let branchMapCache = null; // { data, ts }
+
 /**
  * Fetch branch locations for the map (only branches with lat/lng set).
  * @returns {{ branches: Array<{ branch_code, branch_name, state, latitude, longitude, office_type, network_count }>, unmappedCount: number }}
  */
 export const getBranchMapData = async () => {
-  const response = await api.get('/branches/map-data');
-  return response.data;
+  if (branchMapCache && Date.now() - branchMapCache.ts < BRANCH_MAP_CACHE_MS) {
+    return branchMapCache.data;
+  }
+  if (branchMapPromise) return branchMapPromise;
+
+  branchMapPromise = api.get('/branches/map-data')
+    .then((response) => {
+      branchMapCache = { data: response.data, ts: Date.now() };
+      return response.data;
+    })
+    .finally(() => { branchMapPromise = null; });
+
+  return branchMapPromise;
 };
 
 // ─── Branches & branch assets ────────────────────────────────────────────────
@@ -416,16 +439,52 @@ export const getBranches = async (search = '') => {
   return d?.branches || d?.data || [];
 };
 
+/**
+ * Fixed assets — furniture / facility items (AC, Safe Locker, Chairs, UPS,
+ * Generator …). Server-side these live in the same `hardware` table but under
+ * asset types whose category is `fixed`, which the `onlyFixed` flag selects.
+ *
+ * `/branches/:code/assets` deliberately excludes them, so a branch's fixed
+ * assets have to be fetched separately.
+ *
+ * @param {string} [branchCode] narrow to one branch. `/hardware` ignores
+ *   `branch_code`, so we pass the code as a `search` term (which does cover
+ *   branch_code server-side) and then re-filter exactly — search is a
+ *   substring match, so "100_A" would otherwise also return "100_A6".
+ */
+export const getFixedAssets = async (branchCode) => {
+  const params = { onlyFixed: true, limit: 10000 };
+  if (branchCode) params.search = branchCode;
+  const response = await api.get('/hardware', { params });
+  const list = response.data?.data || response.data?.hardware
+    || (Array.isArray(response.data) ? response.data : []);
+  return branchCode
+    ? list.filter((a) => a.branch_code === branchCode)
+    : list;
+};
+
 export const getBranchAssets = async (branchCode) => {
-  const response = await api.get(`/branches/${branchCode}/assets`);
+  const [response, fixed] = await Promise.all([
+    api.get(`/branches/${branchCode}/assets`),
+    // Non-fatal: a fixed-assets failure shouldn't blank the whole branch page.
+    getFixedAssets(branchCode).catch(() => []),
+  ]);
   // Server shape: { data: { branch, hardware, software, network } }.
   // Older / alternative shape: { branch, hardware, software, network } at root.
   const root = response.data?.data || response.data || {};
+
+  // The branch endpoint's `hardware` array is the whole hardware table for the
+  // branch, which includes fixed-category rows — so without this they'd render
+  // twice, once under Hardware and again under Fixed assets.
+  const fixedIds = new Set(fixed.map((a) => a.id));
+  const hardware = (root.hardware || []).filter((a) => !fixedIds.has(a.id));
+
   return {
     branch:   root.branch,
-    hardware: root.hardware || [],
+    hardware,
     software: root.software || [],
     network:  root.network  || [],
+    fixed,
   };
 };
 
@@ -600,7 +659,7 @@ export const getSoftwareAssetById = async (id) => {
 
 // ─── Asset photo upload ──────────────────────────────────────────────────────
 export const uploadAssetPhoto = async (id, file) => {
-  const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+  const token = await getToken();
   const baseURL = api.defaults.baseURL;
 
   const fd = new FormData();

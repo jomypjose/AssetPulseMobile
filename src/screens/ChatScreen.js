@@ -18,7 +18,7 @@ import {
   getApiBaseUrl,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { themed, C, R, S, cardShadow, CHROME } from '../theme';
+import { themed, C, R, S, cardShadow, CHROME, DANGER_TEXT } from '../theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const initials = (name) => {
@@ -352,6 +352,12 @@ const ChatScreen = ({ route, navigation }) => {
   const insets  = useSafeAreaInsets();
   const { user } = useAuth();
   const listRef = useRef(null);
+  // Tracks whether the user is scrolled near the bottom already, so the 10s
+  // poll (which replaces `messages` wholesale) doesn't yank someone back down
+  // mid-read when they've scrolled up to older messages. Starts true since a
+  // freshly opened conversation is at the bottom.
+  const isNearBottomRef = useRef(true);
+  const NEAR_BOTTOM_THRESHOLD = 80;
 
   const [messages,     setMessages]     = useState([]);
   const [isLoading,    setIsLoading]    = useState(true);
@@ -383,10 +389,16 @@ const ChatScreen = ({ route, navigation }) => {
   }, [fetchMessages]);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && isNearBottomRef.current) {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100);
     }
   }, [messages.length]);
+
+  const handleScroll = useCallback((e) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    isNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
+  }, []);
 
   // ── Send ────────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -416,6 +428,7 @@ const ChatScreen = ({ route, navigation }) => {
 
     setDraft('');
     setAttachment(null);
+    isNearBottomRef.current = true; // sending a message should always jump to it
     setMessages((prev) => [...prev, optimistic]);
     setIsSending(true);
 
@@ -530,7 +543,9 @@ const ChatScreen = ({ route, navigation }) => {
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onScroll={handleScroll}
+          scrollEventThrottle={100}
+          onContentSizeChange={() => { if (isNearBottomRef.current) listRef.current?.scrollToEnd({ animated: false }); }}
           onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -621,7 +636,7 @@ const styles = themed(() => ({
     borderRadius: R.sm, padding: S.sm,
     borderLeftWidth: 3, borderLeftColor: C.offline,
   },
-  errorText: { color: '#fca5a5', fontSize: 12 },
+  errorText: { color: DANGER_TEXT, fontSize: 12 },
 
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
   loadingText:  { color: C.textDim, fontSize: 14 },

@@ -7,10 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import {
   ChevronLeft, Building2, Cpu, MonitorSmartphone, Network,
-  ChevronRight, Search as SearchIcon, X, ListPlus,
+  ChevronRight, Search as SearchIcon, X, ListPlus, Armchair,
 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getBranchAssets } from '../services/api';
-import { themed, C, R, S, cardShadow, CHROME } from '../theme';
+import AnimatedCounter from '../components/AnimatedCounter';
+import { themed, C, R, S, cardShadow, CHROME, tintGradient, chromeGradient } from '../theme';
 
 const SectionRow = ({ title, more, onMore }) => (
   <View style={styles.sectionRow}>
@@ -26,8 +28,14 @@ const SectionRow = ({ title, more, onMore }) => (
 
 const Stat = ({ Icon, label, value, color }) => (
   <View style={styles.statCol}>
-    <Icon color={color} size={18} strokeWidth={2.2} />
-    <Text style={[styles.statValue, { color }]}>{value}</Text>
+    <LinearGradient
+      colors={tintGradient(color)}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      style={styles.statIcon}
+    >
+      <Icon color={color} size={16} strokeWidth={2.2} />
+    </LinearGradient>
+    <AnimatedCounter value={value} style={[styles.statValue, { color }]} />
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
@@ -44,7 +52,7 @@ const AssetRow = ({ a, kind, navigation }) => {
   let subParts = [];
   let assignee = null;   // dedicated line — only set if the asset is assigned
 
-  if (kind === 'hardware') {
+  if (kind === 'hardware' || kind === 'fixed') {
     title = a.item_id
       || [a.brand_name, a.model_name].filter(Boolean).join(' ')
       || a.serial_number
@@ -90,6 +98,8 @@ const AssetRow = ({ a, kind, navigation }) => {
       onPress={() => {
         if (kind === 'network' && a.ip_address) {
           navigation.navigate('DeviceDetail', { deviceId: a.id, deviceIp: a.ip_address });
+        } else if (a.id) {
+          navigation.navigate('AssetDetail', { assetId: a.id, kind, initialAsset: a });
         }
       }}
     >
@@ -135,17 +145,22 @@ const BranchDetailScreen = ({ route, navigation }) => {
   const hardwareAll = data?.hardware || [];
   const softwareAll = data?.software || [];
   const networkAll  = data?.network  || [];
+  const fixedAll    = data?.fixed    || [];
 
-  const { hardware, software, network } = useMemo(() => {
+  const { hardware, software, network, fixed } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return { hardware: hardwareAll, software: softwareAll, network: networkAll };
+    if (!q) {
+      return { hardware: hardwareAll, software: softwareAll, network: networkAll, fixed: fixedAll };
+    }
     const match = (fields) => fields.filter(Boolean)
       .some((s) => String(s).toLowerCase().includes(q));
+    const matchHw = (a) => match([
+      a.item_id, a.brand_name, a.model_name, a.serial_number,
+      a.asset_type, a.emp_name, a.emp_code, a.department, a.asset_status,
+    ]);
     return {
-      hardware: hardwareAll.filter((a) => match([
-        a.item_id, a.brand_name, a.model_name, a.serial_number,
-        a.asset_type, a.emp_name, a.emp_code, a.department, a.asset_status,
-      ])),
+      hardware: hardwareAll.filter(matchHw),
+      fixed:    fixedAll.filter(matchHw),
       software: softwareAll.filter((a) => match([
         a.software_name, a.item_id, a.subscription_type,
         a.emp_name, a.emp_code, a.license_key,
@@ -155,14 +170,18 @@ const BranchDetailScreen = ({ route, navigation }) => {
         a.asset_type, a.category, a.ip_address,
       ])),
     };
-  }, [query, hardwareAll, softwareAll, networkAll]);
+  }, [query, hardwareAll, softwareAll, networkAll, fixedAll]);
 
   const INLINE_LIMIT = 20;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <StatusBar style="auto" />
-      <View style={styles.header}>
+      <LinearGradient
+        colors={chromeGradient()}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <ChevronLeft color={CHROME.text} size={22} />
         </TouchableOpacity>
@@ -177,7 +196,7 @@ const BranchDetailScreen = ({ route, navigation }) => {
         <View style={styles.iconChip}>
           <Building2 color={C.primary} size={16} />
         </View>
-      </View>
+      </LinearGradient>
 
       {loading ? (
         <View style={styles.centered}>
@@ -196,6 +215,7 @@ const BranchDetailScreen = ({ route, navigation }) => {
             <Stat Icon={Cpu}                label="Hardware"  value={hardwareAll.length} color={C.primary} />
             <Stat Icon={MonitorSmartphone}  label="Software"  value={softwareAll.length} color={C.cyan} />
             <Stat Icon={Network}            label="Network"   value={networkAll.length}  color={C.online} />
+            <Stat Icon={Armchair}           label="Fixed"     value={fixedAll.length}    color={C.purple} />
           </View>
 
           {/* Search */}
@@ -277,7 +297,25 @@ const BranchDetailScreen = ({ route, navigation }) => {
             </>
           )}
 
-          {hardware.length === 0 && software.length === 0 && network.length === 0 && query && (
+          {fixed.length > 0 && (
+            <>
+              <SectionRow
+                title={`Fixed assets (${fixed.length})`}
+                more={fixed.length > INLINE_LIMIT && `Show all ${fixed.length}`}
+                onMore={() => navigation.navigate('BranchAssetsList', {
+                  branch, kind: 'fixed', initialQuery: query,
+                })}
+              />
+              <View style={styles.list}>
+                {fixed.slice(0, INLINE_LIMIT).map((a) => (
+                  <AssetRow key={`fx-${a.id}`} a={a} kind="fixed" navigation={navigation} />
+                ))}
+              </View>
+            </>
+          )}
+
+          {hardware.length === 0 && software.length === 0 && network.length === 0
+            && fixed.length === 0 && query && (
             <Text style={styles.dim}>No assets match "{query}".</Text>
           )}
         </ScrollView>
@@ -318,7 +356,11 @@ const styles = themed(() => ({
 
   statsRow: { flexDirection: 'row', marginBottom: S.lg, paddingVertical: S.sm },
   statCol:  { flex: 1, alignItems: 'center', gap: 4 },
-  statValue:{ fontSize: 22, fontWeight: '800' },
+  statIcon: {
+    width: 34, height: 34, borderRadius: R.md,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 2,
+  },
+  statValue:{ fontSize: 21, fontWeight: '800', letterSpacing: -0.5 },
   statLabel:{ fontSize: 10, color: C.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
 
   searchBox: {

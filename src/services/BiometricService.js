@@ -52,9 +52,16 @@ export const setBiometricEnabled = async (enabled) => {
 };
 
 /**
- * Prompt the user to authenticate. Resolves to true if the user passes
- * (or if the device/biometric stack is unavailable — fail-open so we don't
- * lock users out of their own app).
+ * Prompt the user to authenticate. Resolves to true only on an explicit
+ * successful result from the OS prompt.
+ *
+ * Fails CLOSED: any error while checking hardware/enrollment or while
+ * running the prompt itself denies the unlock, rather than letting it
+ * through. The only case that unlocks without a prompt is when biometric
+ * hardware genuinely isn't available on the device — someone couldn't have
+ * enabled the lock in the first place without it (see isAvailable() gating
+ * in SettingsScreen), so that path can't be used to bypass a lock that's
+ * actually protecting anything.
  */
 export const authenticate = async (reason = 'Unlock AssetPulse') => {
   if (!LA) return true;
@@ -68,6 +75,7 @@ export const authenticate = async (reason = 'Unlock AssetPulse') => {
     });
     return !!result?.success;
   } catch {
-    return true;
+    // The prompt itself errored (interrupted, native crash, etc.) — deny.
+    return false;
   }
 };

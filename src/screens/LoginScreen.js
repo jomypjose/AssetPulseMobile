@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Eye, EyeOff, Lock, User, Server, ArrowRight } from 'lucide-react-native';
 import PulseLogo from '../components/PulseLogo';
 import { useAuth } from '../context/AuthContext';
-import { themed, C, R, S } from '../theme';
+import { themed, C, R, S, DANGER_TEXT } from '../theme';
 
 // ─── Brand hero — refined logo tile with a single soft pulse ──────────────────
 const BrandHero = () => {
@@ -339,7 +339,7 @@ const styles = themed(() => ({
     marginBottom: S.lg,
     borderLeftWidth: 3, borderLeftColor: C.offline,
   },
-  errorText: { color: '#fca5a5', fontSize: 13, flex: 1, lineHeight: 18 },
+  errorText: { color: DANGER_TEXT, fontSize: 13, flex: 1, lineHeight: 18 },
 
   // Button
   btn: {

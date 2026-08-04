@@ -31,24 +31,6 @@ export const cacheClear = async (key) => {
 };
 
 /**
- * Try a network fetch; if it throws, fall back to the cached snapshot.
- * On success, refresh the cache. Returns { data, fromCache, cachedAt }.
- */
-export const withCache = async (key, fetcher) => {
-  try {
-    const data = await fetcher();
-    cacheSet(key, data);
-    return { data, fromCache: false, cachedAt: Date.now() };
-  } catch (err) {
-    const snapshot = await cacheGet(key);
-    if (snapshot) {
-      return { data: snapshot.value, fromCache: true, cachedAt: snapshot.ts, error: err };
-    }
-    throw err;
-  }
-};
-
-/**
  * Pretty-prints "how stale" a cached snapshot is.
  */
 export const formatStale = (ts) => {

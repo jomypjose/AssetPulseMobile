@@ -54,8 +54,10 @@ export const buildMapHtml = (branches, isDark, opts = {}) => {
   return `<!DOCTYPE html><html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { width:100%; height:100%; overflow:hidden; background:${bgColor}; }
@@ -165,6 +167,15 @@ export const buildMapHtml = (branches, isDark, opts = {}) => {
 <script>
 var allBranches = ${branchesJson};
 
+// Branch/state fields come from server data and are rendered via innerHTML
+// (Leaflet divIcon/popup) below — escape before splicing into any markup
+// string so a branch name like "St. Mary's <img onerror=...>" can't execute.
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
 var map = L.map('map', {
   zoomControl:        true,
   dragging:           true,
@@ -215,7 +226,7 @@ Object.keys(stateMap).forEach(function(state) {
     className: '',
     html: '<div class="state-bubble" style="width:'+size+'px;height:'+size+'px;background:'+color+';">'
         + '<span class="bubble-count">'+n+'</span>'
-        + '<span class="bubble-label">'+state+'</span>'
+        + '<span class="bubble-label">'+esc(state)+'</span>'
         + '</div>',
     iconSize:    [size, size],
     iconAnchor:  [half, half],
@@ -224,7 +235,7 @@ Object.keys(stateMap).forEach(function(state) {
 
   var dot   = '<span class="popup-dot" style="background:'+color+'"></span>';
   var popup = '<div class="popup-card">'
-    + '<div class="popup-title">'+dot+state+'</div>'
+    + '<div class="popup-title">'+dot+esc(state)+'</div>'
     + '<div class="popup-row"><span class="popup-key">Branches</span><span class="popup-val">'+n+'</span></div>'
     + '<div class="popup-row"><span class="popup-key">Network devices</span><span class="popup-val">'+total+'</span></div>'
     + '<div class="popup-row"><span class="popup-key">Avg / branch</span><span class="popup-val">'+avg.toFixed(1)+'</span></div>'
@@ -277,8 +288,8 @@ function showState(state) {
 
     var dot   = '<span class="popup-dot" style="background:'+color+'"></span>';
     var popup = '<div class="popup-card">'
-      + '<div class="popup-title">'+dot+b.name+'</div>'
-      + (b.code ? '<div class="popup-row"><span class="popup-key">Code</span><span class="popup-val">'+b.code+'</span></div>' : '')
+      + '<div class="popup-title">'+dot+esc(b.name)+'</div>'
+      + (b.code ? '<div class="popup-row"><span class="popup-key">Code</span><span class="popup-val">'+esc(b.code)+'</span></div>' : '')
       + '<div class="popup-row"><span class="popup-key">Network devices</span><span class="popup-val">'+b.net+'</span></div>'
       + '</div>';
 

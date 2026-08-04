@@ -12,8 +12,9 @@ import {
   MapPin, Tag, Clock, Calendar, Gauge, Activity, Users,
 } from 'lucide-react-native';
 import { getAlerts, acknowledgeAlerts } from '../services/api';
+import StaleBanner from '../components/StaleBanner';
 import { POLL_INTERVAL } from '../config';
-import { themed, C, R, S, cardShadow, elevation, CHROME } from '../theme';
+import { themed, C, R, S, cardShadow, elevation, CHROME, DANGER_TEXT } from '../theme';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -424,6 +425,7 @@ const AlertsScreen = () => {
   const [selectedIds,   setSelectedIds]   = useState(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   const [detailAlert,   setDetailAlert]   = useState(null);
+  const [cachedAt,      setCachedAt]      = useState(null);   // set when data.fromCache
   const bulkBarAnim = useRef(new Animated.Value(0)).current;
 
   const fetchAlerts = useCallback(async (isRefresh = false) => {
@@ -432,6 +434,7 @@ const AlertsScreen = () => {
     try {
       const data = await getAlerts();
       setAlerts(data.alerts || []);
+      setCachedAt(data.fromCache ? data.cachedAt : null);
     } catch (err) {
       setError(err.message || 'Failed to load alerts.');
     } finally {
@@ -665,6 +668,8 @@ const AlertsScreen = () => {
         </View>
       )}
 
+      {!!cachedAt && <StaleBanner cachedAt={cachedAt} />}
+
       {isLoading ? (
         <View style={styles.loadingState}>
           <ActivityIndicator size="large" color={C.primary} />
@@ -782,7 +787,7 @@ const styles = themed(() => ({
     borderRadius: R.md, padding: S.md,
     borderLeftWidth: 3, borderLeftColor: C.offline,
   },
-  errorText: { color: '#fca5a5', fontSize: 13 },
+  errorText: { color: DANGER_TEXT, fontSize: 13 },
 
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
   loadingText:  { color: C.textMuted, fontSize: 14 },

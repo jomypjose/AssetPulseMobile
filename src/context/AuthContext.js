@@ -3,9 +3,13 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login as apiLogin, setApiBaseUrl, getProfile, registerPushToken } from '../services/api';
-import { TOKEN_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY, USER_STORAGE_KEY, SERVER_URL_KEY } from '../config';
+import { USER_STORAGE_KEY, SERVER_URL_KEY } from '../config';
 import { init as initNotifications } from '../services/NotificationService';
 import { isBiometricEnabled, authenticate as biometricAuth } from '../services/BiometricService';
+import {
+  getToken as getStoredToken, setToken as setStoredToken, removeToken,
+  setRefreshToken as setStoredRefreshToken, removeRefreshToken,
+} from '../services/tokenStorage';
 
 const AuthContext = createContext(null);
 
@@ -18,6 +22,12 @@ export const AuthProvider = ({ children }) => {
 
   // Stable ref so the on-mount effect can call refreshProfilePicture safely
   const refreshRef = useRef(null);
+
+  // Tracks whether this provider instance is still mounted, so background
+  // setTimeout callbacks (scheduled from login()) can no-op after an unmount
+  // — e.g. ThemeShell remounts the whole AuthProvider subtree on theme change.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   /**
    * Refresh the profile picture from the server and merge it into the user state.
@@ -61,13 +71,22 @@ export const AuthProvider = ({ children }) => {
 
   // On mount: restore server URL + session
   useEffect(() => {
+    let cancelled = false;
+    const timers = [];
+    const safeTimeout = (fn, ms) => {
+      const id = setTimeout(() => { if (!cancelled) fn(); }, ms);
+      timers.push(id);
+      return id;
+    };
+
     const restore = async () => {
       try {
         const [storedUrl, storedToken, storedUser] = await Promise.all([
           AsyncStorage.getItem(SERVER_URL_KEY),
-          AsyncStorage.getItem(TOKEN_STORAGE_KEY),
+          getStoredToken(),
           AsyncStorage.getItem(USER_STORAGE_KEY),
         ]);
+        if (cancelled) return;
 
         if (storedUrl) {
           setApiBaseUrl(storedUrl);
@@ -78,13 +97,13 @@ export const AuthProvider = ({ children }) => {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
           // Refresh profile picture in background after restoring session
-          setTimeout(() => refreshRef.current?.(), 1000);
+          safeTimeout(() => refreshRef.current?.(), 1000);
           // Register push token in background (non-blocking)
-          setTimeout(() => registerExpoPushToken(), 2000);
+          safeTimeout(() => registerExpoPushToken(), 2000);
 
           // If the user enabled biometric unlock, gate the app until they pass.
           const needsBiometric = await isBiometricEnabled();
-          if (needsBiometric) setBiometricLocked(true);
+          if (!cancelled && needsBiometric) setBiometricLocked(true);
         }
 
         // Initialise notifications early so _permGranted is set before
@@ -93,10 +112,15 @@ export const AuthProvider = ({ children }) => {
       } catch {
         // start fresh
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     restore();
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
   }, []);   // runs once on mount; uses refreshRef to avoid stale-closure issues
 
   /**
@@ -117,8 +141,8 @@ export const AuthProvider = ({ children }) => {
     try {
       await Promise.all([
         AsyncStorage.removeItem(SERVER_URL_KEY),
-        AsyncStorage.removeItem(TOKEN_STORAGE_KEY),
-        AsyncStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY),
+        removeToken(),
+        removeRefreshToken(),
         AsyncStorage.removeItem(USER_STORAGE_KEY),
       ]);
     } catch {}
@@ -132,24 +156,24 @@ export const AuthProvider = ({ children }) => {
     const data = await apiLogin(username, password);
     const { token: newToken, refreshToken: newRefresh, user: newUser } = data;
     const writes = [
-      AsyncStorage.setItem(TOKEN_STORAGE_KEY, newToken),
+      setStoredToken(newToken),
       AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser)),
     ];
-    if (newRefresh) writes.push(AsyncStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, newRefresh));
+    if (newRefresh) writes.push(setStoredRefreshToken(newRefresh));
     await Promise.all(writes);
     setToken(newToken);
     setUser(newUser);
     // Fetch full profile (including profile_picture) right after login
-    setTimeout(() => refreshRef.current?.(), 500);
+    setTimeout(() => { if (mountedRef.current) refreshRef.current?.(); }, 500);
     // Register push token after login
-    setTimeout(() => registerExpoPushToken(), 1500);
+    setTimeout(() => { if (mountedRef.current) registerExpoPushToken(); }, 1500);
   }, [registerExpoPushToken]);
 
   const logout = useCallback(async () => {
     try {
       await Promise.all([
-        AsyncStorage.removeItem(TOKEN_STORAGE_KEY),
-        AsyncStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY),
+        removeToken(),
+        removeRefreshToken(),
         AsyncStorage.removeItem(USER_STORAGE_KEY),
       ]);
     } catch {}

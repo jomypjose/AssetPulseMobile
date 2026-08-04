@@ -17,10 +17,17 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { getDashboardStats, getDevices, getAlerts, getUnreadMessageCount } from '../services/api';
 import { POLL_INTERVAL } from '../config';
-import { themed, C, R, S, elevation, CHROME } from '../theme';
+import {
+  themed, C, R, S, elevation, CHROME, DANGER_TEXT,
+  chromeGradient, tintGradient,
+} from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import UserAvatar from '../components/UserAvatar';
 import MiniMap from '../components/MiniMap';
 import WeatherChip from '../components/WeatherChip';
+import StaleBanner from '../components/StaleBanner';
+import GradientCard from '../components/GradientCard';
+import AnimatedCounter from '../components/AnimatedCounter';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const greeting = () => {
@@ -71,7 +78,7 @@ const HealthRing = ({ online = 0, warning = 0, offline = 0, total = 0 }) => {
   ];
 
   return (
-    <View style={hr.card}>
+    <GradientCard style={hr.card} radius={R.xl} level={2} padded={false}>
       <View style={hr.inner}>
         {/* Ring */}
         <View style={hr.ringWrap}>
@@ -86,7 +93,7 @@ const HealthRing = ({ online = 0, warning = 0, offline = 0, total = 0 }) => {
             />
           </Svg>
           <View style={hr.ringCenter}>
-            <Text style={[hr.pct, { color }]}>{pct}%</Text>
+            <AnimatedCounter value={pct} style={[hr.pct, { color }]} format={(v) => `${v}%`} />
             <Text style={hr.pctLabel}>health</Text>
           </View>
         </View>
@@ -96,7 +103,7 @@ const HealthRing = ({ online = 0, warning = 0, offline = 0, total = 0 }) => {
           {rows.map(({ label, count, color: c }) => (
             <View key={label} style={hr.statRow}>
               <View style={[hr.dot, { backgroundColor: c }]} />
-              <Text style={hr.statCount}>{count}</Text>
+              <AnimatedCounter value={count} style={hr.statCount} />
               <Text style={hr.statLabel}>{label}</Text>
             </View>
           ))}
@@ -115,15 +122,13 @@ const HealthRing = ({ online = 0, warning = 0, offline = 0, total = 0 }) => {
           </Text>
         </View>
       </View>
-    </View>
+    </GradientCard>
   );
 };
 const hr = themed(() => ({
   card: {
-    backgroundColor: C.card, borderRadius: R.xl,
+    borderRadius: R.xl,
     padding: S.xl,
-    borderWidth: 1, borderColor: C.border,
-    ...elevation(2),
   },
   inner:     { flexDirection: 'row', alignItems: 'center', gap: S.xl },
   ringWrap:  { position: 'relative', alignItems: 'center', justifyContent: 'center' },
@@ -145,23 +150,25 @@ const hr = themed(() => ({
 
 // ─── KPI strip ────────────────────────────────────────────────────────────────
 const KpiCard = ({ icon: Icon, value, label, color, onPress }) => (
-  <TouchableOpacity style={kpi.card} activeOpacity={0.8} onPress={onPress} disabled={!onPress}>
-    <View style={[kpi.iconChip, { backgroundColor: `${color}1c` }]}>
-      <Icon color={color} size={16} strokeWidth={2.2} />
-    </View>
-    <Text style={kpi.value}>{value}</Text>
-    <Text style={kpi.label} numberOfLines={1}>{label}</Text>
-  </TouchableOpacity>
+  <View style={kpi.slot}>
+    <GradientCard style={kpi.card} radius={R.lg} level={1} padded={false} onPress={onPress}>
+      <LinearGradient
+        colors={tintGradient(color)}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={kpi.iconChip}
+      >
+        <Icon color={color} size={16} strokeWidth={2.2} />
+      </LinearGradient>
+      <AnimatedCounter value={value} style={kpi.value} />
+      <Text style={kpi.label} numberOfLines={1}>{label}</Text>
+    </GradientCard>
+  </View>
 );
 const kpi = themed(() => ({
-  card: {
-    flex: 1, backgroundColor: C.card, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border,
-    paddingVertical: S.md, paddingHorizontal: S.md, gap: 5,
-    ...elevation(1),
-  },
+  slot: { flex: 1 },
+  card: { paddingVertical: S.md, paddingHorizontal: S.md, gap: 5 },
   iconChip: { width: 30, height: 30, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-  value:    { fontSize: 22, fontWeight: '800', color: C.text },
+  value:    { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
   label:    { fontSize: 11, color: C.textMuted, fontWeight: '600' },
 }));
 
@@ -319,6 +326,7 @@ const DashboardScreen = ({ navigation }) => {
   const [isLoading,    setIsLoading]    = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error,        setError]        = useState('');
+  const [cachedAt,     setCachedAt]     = useState(null);   // set when devices/alerts came from cache
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
@@ -343,6 +351,7 @@ const DashboardScreen = ({ navigation }) => {
         .slice(0, 6);
       setAlerts(topAlerts);
       setUnreadMsgs(msgCount.count || 0);
+      setCachedAt(devicesData.fromCache ? devicesData.cachedAt : (alertsData.fromCache ? alertsData.cachedAt : null));
     } catch (err) {
       setError(err.message || 'Failed to load dashboard.');
     } finally {
@@ -356,6 +365,7 @@ const DashboardScreen = ({ navigation }) => {
     const t = setInterval(() => fetchData(), POLL_INTERVAL);
     return () => clearInterval(t);
   }, [fetchData]);
+
 
   const navigateTo = useCallback((tab) => {
     const parent = navigation.getParent();
@@ -384,7 +394,12 @@ const DashboardScreen = ({ navigation }) => {
       <StatusBar style="auto" />
 
       {/* ── Hero Header ── */}
-      <View style={styles.hero}>
+      <LinearGradient
+        colors={chromeGradient()}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
         <View style={styles.heroLeft}>
           <UserAvatar user={user} serverUrl={serverUrl} size={46} />
           <View style={{ flexShrink: 1 }}>
@@ -395,7 +410,7 @@ const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
         <WeatherChip />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scroll}
@@ -417,6 +432,8 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
+
+        {!!cachedAt && <StaleBanner cachedAt={cachedAt} />}
 
         {/* Health hero */}
         {isLoading ? (
@@ -473,7 +490,8 @@ const DashboardScreen = ({ navigation }) => {
           ) : devices.length === 0 ? (
             <View style={styles.emptyInCard}>
               <Server color={C.textDim} size={28} strokeWidth={1.2} />
-              <Text style={styles.emptyText}>No devices found.</Text>
+              <Text style={styles.emptyText}>No devices found</Text>
+              <Text style={styles.emptySub}>Devices will appear here once monitoring picks them up.</Text>
             </View>
           ) : (
             devices.map((d, i) => (
@@ -508,7 +526,7 @@ const styles = themed(() => ({
     backgroundColor: C.offlineBg, borderRadius: R.md, padding: S.md,
     marginBottom: S.lg, borderLeftWidth: 3, borderLeftColor: C.offline,
   },
-  errorText: { color: '#fca5a5', fontSize: 13, flex: 1 },
+  errorText: { color: DANGER_TEXT, fontSize: 13, flex: 1 },
 
   heroPlaceholder: { height: 180, alignItems: 'center', justifyContent: 'center' },
 
@@ -525,7 +543,8 @@ const styles = themed(() => ({
     ...elevation(2),
   },
   emptyInCard: { paddingVertical: S.xl, alignItems: 'center', gap: S.sm },
-  emptyText:   { color: C.textDim, fontSize: 13, textAlign: 'center' },
+  emptyText:   { color: C.textMuted, fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  emptySub:    { color: C.textDim, fontSize: 12, textAlign: 'center', marginTop: -4 },
 }));
 
 export default DashboardScreen;

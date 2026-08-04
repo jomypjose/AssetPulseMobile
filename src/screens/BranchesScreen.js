@@ -9,6 +9,7 @@ import {
   ChevronLeft, Search as SearchIcon, Building2, ChevronRight, X,
 } from 'lucide-react-native';
 import { getBranches } from '../services/api';
+import FadeIn from '../components/FadeIn';
 import { themed, C, R, S, cardShadow, CHROME } from '../theme';
 
 const BranchesScreen = ({ navigation }) => {
@@ -81,6 +82,7 @@ const BranchesScreen = ({ navigation }) => {
           <ActivityIndicator color={C.primary} size="large" />
         </View>
       ) : (
+        <FadeIn style={{ flex: 1 }}>
         <FlatList
           data={filtered}
           keyExtractor={(b) => String(b.branch_code || b.id)}
@@ -115,20 +117,24 @@ const BranchesScreen = ({ navigation }) => {
             />
           }
           ListEmptyComponent={
-            <View style={styles.centered}>
+            <View style={styles.emptyState}>
               {error ? (
                 <>
-                  <Text style={[styles.dim, { color: C.offline, marginBottom: S.xs }]}>
-                    {error}
-                  </Text>
-                  <Text style={styles.dim}>Pull down to retry.</Text>
+                  <Building2 color={C.offline} size={44} strokeWidth={1.1} />
+                  <Text style={styles.emptyTitle}>Could not load branches</Text>
+                  <Text style={styles.emptySub}>{error}{'\n'}Pull down to retry.</Text>
                 </>
               ) : (
-                <Text style={styles.dim}>No branches match your search.</Text>
+                <>
+                  <Building2 color={C.textDim} size={44} strokeWidth={1.1} />
+                  <Text style={styles.emptyTitle}>No branches found</Text>
+                  <Text style={styles.emptySub}>Try a different search term.</Text>
+                </>
               )}
             </View>
           }
         />
+        </FadeIn>
       )}
     </View>
   );
@@ -159,6 +165,10 @@ const styles = themed(() => ({
 
   centered: { padding: S.xxl, alignItems: 'center', justifyContent: 'center' },
   dim: { color: C.textMuted, fontSize: 13 },
+
+  emptyState: { paddingTop: 80, alignItems: 'center', gap: S.sm, paddingHorizontal: S.xxxl },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textMuted, marginTop: S.sm },
+  emptySub:   { fontSize: 13, color: C.textDim, textAlign: 'center' },
 
   card: {
     flexDirection: 'row', alignItems: 'center', gap: S.md,

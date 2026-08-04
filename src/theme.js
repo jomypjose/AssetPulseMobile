@@ -241,15 +241,23 @@ export const cardShadow = {
 
 /**
  * Elevation helper — returns platform shadow + elevation props.
+ *
+ * Tuned soft-and-wide rather than dark-and-tight: a large blur at low opacity
+ * reads as a premium lift, whereas a hard shadow makes cards look stuck on.
+ * Light mode needs noticeably less opacity than dark to avoid muddy edges.
+ *
  * @param {number} level  1–5
  */
-export const elevation = (level) => ({
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: level * 2 },
-  shadowOpacity: 0.12 + level * 0.07,
-  shadowRadius: level * 4,
-  elevation: level * 2,
-});
+export const elevation = (level) => {
+  const isDark = C.bg === '#080c14';
+  return {
+    shadowColor: isDark ? '#000' : '#0f172a',
+    shadowOffset: { width: 0, height: level * 2 },
+    shadowOpacity: isDark ? 0.10 + level * 0.05 : 0.04 + level * 0.022,
+    shadowRadius: level * 6,
+    elevation: level * 2,
+  };
+};
 
 /**
  * Red-glow shadow for prominent primary-action surfaces (iOS only;
@@ -262,6 +270,39 @@ export const primaryGlow = (opacity = 0.25) => ({
   shadowRadius: 12,
   elevation: 6,
 });
+
+// ─── Gradients ────────────────────────────────────────────────────────────────
+// Returned as plain arrays so callers can spread them straight into
+// <LinearGradient colors={...}>. Kept as getters so they follow the live
+// palette when the scheme changes.
+
+/** Header / app-shell gradient — always dark, matching CHROME. */
+export const chromeGradient = () => ['#232c40', '#1a2233', '#141b29'];
+
+/** Brand gradient for primary surfaces (buttons, hero accents). */
+export const brandGradient = () => [C.primaryLight, C.primary];
+
+/**
+ * Very subtle top-down sheen for cards. Sits over C.card, so it reads as
+ * depth rather than a colour change — the "glass" look the web app uses.
+ */
+export const cardGradient = () => (
+  C.bg === '#080c14'
+    ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.012)']   // dark: light from above
+    // Light: stay fully opaque. A translucent sheen here would let the grey
+    // page background bleed through and the card would stop reading as raised.
+    : ['#ffffff', '#fbfcfe']
+);
+
+/** Tinted gradient from any accent colour — for icon tiles / chips. */
+export const tintGradient = (hex) => [`${hex}26`, `${hex}0d`];
+
+// ─── Cross-theme constants ────────────────────────────────────────────────────
+// Deliberately NOT part of DARK/LIGHT — these sit on top of a fixed-color
+// surface (an error banner's red background, a modal scrim) so they stay the
+// same regardless of scheme, unlike C.* tokens.
+export const DANGER_TEXT = '#fca5a5';           // readable red text on offlineBg banners
+export const BACKDROP    = 'rgba(0,0,0,0.667)'; // modal / sheet backdrop scrim
 
 // ─── Status → colour maps (live getters on `C`) ───────────────────────────────
 export const STATUS_COLOR = {

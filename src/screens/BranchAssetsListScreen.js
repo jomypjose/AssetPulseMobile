@@ -7,33 +7,40 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import {
   ChevronLeft, ChevronRight, Search as SearchIcon, X,
-  Cpu, MonitorSmartphone, Network,
+  Cpu, MonitorSmartphone, Network, Armchair,
 } from 'lucide-react-native';
 import { getBranchAssets } from '../services/api';
-import { themed, C, R, S, CHROME, cardShadow } from '../theme';
+import { themed, C, R, S, CHROME, cardShadow, STATUS_COLOR } from '../theme';
 
 const KIND_LABELS = {
   hardware: 'Hardware',
   software: 'Software',
   network:  'Network devices',
+  fixed:    'Fixed assets',
 };
 
 const KIND_ICON = {
   hardware: Cpu,
   software: MonitorSmartphone,
   network:  Network,
+  fixed:    Armchair,
 };
 
 // Per-kind filter chips
+const HARDWARE_FILTERS = [
+  { key: 'all',         label: 'All',         test: () => true },
+  { key: 'assigned',    label: 'Assigned',    test: (a) => !!a.emp_name },
+  { key: 'unassigned',  label: 'Unassigned',  test: (a) => !a.emp_name },
+  { key: 'allocated',   label: 'Allocated',   test: (a) => /allocat/i.test(a.asset_status || '') },
+  { key: 'ready',       label: 'Ready',       test: (a) => /ready/i.test(a.asset_status || '') },
+  { key: 'damaged',     label: 'Damaged',     test: (a) => /damag/i.test(a.asset_status || '') },
+];
+
 const FILTERS = {
-  hardware: [
-    { key: 'all',         label: 'All',         test: () => true },
-    { key: 'assigned',    label: 'Assigned',    test: (a) => !!a.emp_name },
-    { key: 'unassigned',  label: 'Unassigned',  test: (a) => !a.emp_name },
-    { key: 'allocated',   label: 'Allocated',   test: (a) => /allocat/i.test(a.asset_status || '') },
-    { key: 'ready',       label: 'Ready',       test: (a) => /ready/i.test(a.asset_status || '') },
-    { key: 'damaged',     label: 'Damaged',     test: (a) => /damag/i.test(a.asset_status || '') },
-  ],
+  // Fixed assets are the same record shape as hardware (same table, different
+  // asset-type category), so they share its filters.
+  fixed: HARDWARE_FILTERS,
+  hardware: HARDWARE_FILTERS,
   software: [
     { key: 'all',         label: 'All',         test: () => true },
     { key: 'assigned',    label: 'Assigned',    test: (a) => !!a.emp_name },
@@ -54,7 +61,7 @@ const FILTERS = {
 };
 
 const matchAsset = (kind, a, q) => {
-  const fields = kind === 'hardware'
+  const fields = (kind === 'hardware' || kind === 'fixed')
     ? [a.item_id, a.brand_name, a.model_name, a.serial_number, a.asset_type, a.emp_name, a.emp_code, a.department, a.asset_status]
     : kind === 'software'
       ? [a.software_name, a.item_id, a.subscription_type, a.emp_name, a.emp_code, a.license_key]
@@ -62,12 +69,32 @@ const matchAsset = (kind, a, q) => {
   return fields.filter(Boolean).some((s) => String(s).toLowerCase().includes(q));
 };
 
+// Left-accent colour per row, reflecting each kind's real-world "health":
+// network devices use live monitoring status, hardware uses asset status,
+// software uses how close it is to expiring.
+const rowAccent = (kind, a) => {
+  if (kind === 'network') return STATUS_COLOR[a.monitoring_status] || C.border;
+  if (kind === 'hardware' || kind === 'fixed') {
+    const s = (a.asset_status || '').toLowerCase();
+    if (/damag|lost|retir/.test(s)) return C.offline;
+    if (/ready|stock|available/.test(s)) return C.online;
+    if (/allocat|assign|active/.test(s)) return C.info;
+    return C.border;
+  }
+  if (a.expiry_date) {
+    const days = (new Date(a.expiry_date) - Date.now()) / 86400000;
+    if (days < 0) return C.offline;
+    if (days <= 30) return C.warning;
+  }
+  return C.border;
+};
+
 const Row = ({ a, kind, navigation }) => {
   let title    = '';
   let subParts = [];
   let assignee = null;
 
-  if (kind === 'hardware') {
+  if (kind === 'hardware' || kind === 'fixed') {
     title = a.item_id || [a.brand_name, a.model_name].filter(Boolean).join(' ') || a.serial_number || `Asset #${a.id}`;
     subParts = [
       a.asset_type,
@@ -99,17 +126,26 @@ const Row = ({ a, kind, navigation }) => {
   }
 
   const sub = subParts.filter(Boolean).join(' · ');
+  const accent = rowAccent(kind, a);
+  const Icon = KIND_ICON[kind] || Cpu;
+  const tappable = (kind === 'network' && !!a.ip_address) || (kind !== 'network' && !!a.id);
 
   return (
     <TouchableOpacity
-      style={styles.row}
-      activeOpacity={0.8}
+      style={[styles.row, { borderLeftColor: accent }]}
+      activeOpacity={tappable ? 0.8 : 1}
+      disabled={!tappable}
       onPress={() => {
         if (kind === 'network' && a.ip_address) {
           navigation.navigate('DeviceDetail', { deviceId: a.id, deviceIp: a.ip_address });
+        } else if (a.id) {
+          navigation.navigate('AssetDetail', { assetId: a.id, kind, initialAsset: a });
         }
       }}
     >
+      <View style={[styles.rowIcon, { backgroundColor: `${accent}18` }]}>
+        <Icon color={accent} size={16} strokeWidth={1.8} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
         {!!sub && <Text style={styles.rowSub} numberOfLines={2}>{sub}</Text>}
@@ -117,7 +153,7 @@ const Row = ({ a, kind, navigation }) => {
           <Text style={styles.rowAssignee} numberOfLines={1}>👤 {assignee}</Text>
         )}
       </View>
-      <ChevronRight color={C.textDim} size={14} />
+      {tappable && <ChevronRight color={C.textDim} size={14} />}
     </TouchableOpacity>
   );
 };
@@ -294,8 +330,12 @@ const styles = themed(() => ({
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
     paddingVertical: 12, paddingHorizontal: S.md,
     backgroundColor: C.card,
-    borderRadius: R.md, ...cardShadow,
+    borderRadius: R.md, borderLeftWidth: 3, ...cardShadow,
     marginBottom: 4,
+  },
+  rowIcon: {
+    width: 32, height: 32, borderRadius: R.sm,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   rowTitle:    { fontSize: 13, color: C.text, fontWeight: '700' },
   rowSub:      { fontSize: 11, color: C.textMuted, marginTop: 2 },
