@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { login as apiLogin, setApiBaseUrl, getProfile, registerPushToken } from '../services/api';
+import { login as apiLogin, logout as apiLogout, setApiBaseUrl, getProfile, registerPushToken } from '../services/api';
 import { USER_STORAGE_KEY, SERVER_URL_KEY } from '../config';
 import { init as initNotifications } from '../services/NotificationService';
 import { isBiometricEnabled, authenticate as biometricAuth } from '../services/BiometricService';
@@ -138,6 +138,7 @@ export const AuthProvider = ({ children }) => {
    * Also clears the session so they must log in again.
    */
   const clearServer = useCallback(async () => {
+    try { await apiLogout(); } catch {}
     try {
       await Promise.all([
         AsyncStorage.removeItem(SERVER_URL_KEY),
@@ -155,6 +156,9 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async (username, password) => {
     const data = await apiLogin(username, password);
     const { token: newToken, refreshToken: newRefresh, user: newUser } = data;
+    // A server that replied with cookie-based auth sends no token in the body.
+    // Fail with something readable instead of letting SecureStore reject undefined.
+    if (!newToken) throw new Error('Login response did not include a token. Update the server or check its version.');
     const writes = [
       setStoredToken(newToken),
       AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser)),
@@ -170,6 +174,13 @@ export const AuthProvider = ({ children }) => {
   }, [registerExpoPushToken]);
 
   const logout = useCallback(async () => {
+    // Tell the server first — it needs the refresh token and a valid access
+    // token, both of which the local clear below destroys. Offline or a dead
+    // server must not trap the user in a signed-in state, so failures are
+    // swallowed and we sign out locally either way.
+    try {
+      await apiLogout();
+    } catch {}
     try {
       await Promise.all([
         removeToken(),

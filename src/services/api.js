@@ -26,6 +26,12 @@ const api = axios.create({
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
+    // The server hands tokens back in httpOnly cookies by default (browser
+    // clients). React Native has no cookie jar we can trust, so we opt into
+    // the body transport: /auth/login and /auth/refresh then return
+    // { token, refreshToken } in the JSON payload. Without this header the
+    // response carries no token and setToken() gets undefined.
+    'X-Token-Transport': 'body',
   },
 });
 
@@ -121,7 +127,11 @@ const performRefresh = async () => {
   // refresh token can't be renewed — surface a clean error, no logout.
   if (!stored) throw new Error('No refresh token available');
   const baseURL = api.defaults.baseURL;
-  const res = await axios.post(`${baseURL}/auth/refresh`, { refreshToken: stored }, { timeout: 15000 });
+  const res = await axios.post(
+    `${baseURL}/auth/refresh`,
+    { refreshToken: stored },
+    { timeout: 15000, headers: { 'X-Token-Transport': 'body' } },
+  );
   const { token: newToken, refreshToken: newRefresh } = res.data || {};
   if (!newToken) throw new Error('Refresh response missing token');
   await setStoredToken(newToken);
@@ -209,7 +219,19 @@ api.interceptors.response.use(
  */
 export const login = async (username, password) => {
   const response = await api.post('/auth/login', { username, password });
-  return response.data; // { token, user }
+  return response.data; // { token, refreshToken, user }
+};
+
+/**
+ * End the session server-side: revokes the whole refresh-token family and
+ * closes the session row. Without this, signing out only forgets the tokens
+ * locally — the refresh token stays valid for its full 7 days and the session
+ * keeps occupying a slot against MAX_SESSIONS_PER_USER.
+ * Best-effort: the caller clears local state regardless of the outcome.
+ */
+export const logout = async () => {
+  const refreshToken = await getRefreshToken();
+  await api.post('/auth/logout', refreshToken ? { refreshToken } : {});
 };
 
 // ─── Network / Devices ───────────────────────────────────────────────────────
