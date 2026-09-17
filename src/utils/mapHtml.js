@@ -33,9 +33,26 @@ export const buildMapHtml = (branches, isDark, opts = {}) => {
   const barBorder = isDark ? 'rgba(239,68,68,0.22)' : 'rgba(220,38,38,0.18)';
   const accentRed = isDark ? '#ef4444' : '#dc2626';
   const btnBg     = isDark ? 'rgba(239,68,68,0.14)' : 'rgba(220,38,38,0.08)';
+  // Basemap tiles.
+  //
+  // These were CartoDB (basemaps.cartocdn.com), which no longer serves
+  // anonymous requests: it returns HTTP 200 with "API KEY REQUIRED —
+  // carto.com/basemaps/apikey" burned diagonally across every tile, so the map
+  // looked broken while reporting success.
+  //
+  // Esri's Canvas basemaps need no key and are already trusted elsewhere in
+  // AssetPulse — the web client uses server.arcgisonline.com for its satellite
+  // layer and the server CSP allows it. Note the {z}/{y}/{x} order: Esri puts
+  // row before column, unlike the {z}/{x}/{y} of Carto and OSM.
+  //
+  // They stop at zoom 16, above which Esri returns a light-grey "Map data not
+  // yet available" placeholder that would flash bright on a dark map — hence
+  // maxNativeZoom below, which makes Leaflet upscale z16 rather than ask.
+  const esriCanvas = (style) =>
+    `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`;
   const tileUrl   = isDark
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    ? esriCanvas('World_Dark_Gray_Base')
+    : esriCanvas('World_Light_Gray_Base');
 
   // JS snippet injected when postMessage is enabled
   const pmState  = pm
@@ -90,6 +107,16 @@ export const buildMapHtml = (branches, isDark, opts = {}) => {
   #branchCount { font-size:11px; color:${popupSub}; flex-shrink:0; }
 
   /* ── Leaflet overrides ── */
+  /* Esri's terms require visible credit. Keep it legible but quiet — it sits
+     opposite the zoom control so the two never overlap. */
+  .leaflet-control-attribution {
+    background: ${barBg} !important;
+    color: ${popupSub} !important;
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+    border-radius: 4px 0 0 0;
+  }
+  .leaflet-control-attribution a { color: ${popupSub} !important; }
   .leaflet-control-zoom { right:8px !important; bottom:8px !important; }
   .leaflet-control-zoom a {
     background:${popupBg} !important; color:${popupText} !important;
@@ -183,9 +210,13 @@ var map = L.map('map', {
   scrollWheelZoom:    false,
   doubleClickZoom:    true,
   tap:                false,
-  attributionControl: false,
+  attributionControl: true,
 });
-L.tileLayer('${tileUrl}', { attribution:'', subdomains:'abcd', maxZoom:18 }).addTo(map);
+L.tileLayer('${tileUrl}', {
+  attribution: 'Tiles &copy; Esri',
+  maxNativeZoom: 16,   // highest zoom Esri Canvas actually has imagery for
+  maxZoom: 18,         // keep pinch-zoom; Leaflet upscales past 16
+}).addTo(map);
 map.zoomControl.setPosition('bottomright');
 
 function bubbleColor(avg) {
