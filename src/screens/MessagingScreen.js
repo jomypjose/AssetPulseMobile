@@ -5,6 +5,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CONVERSATIONS_POLL_MS } from '../config';
+import { usePolling } from '../hooks/usePolling';
 import { StatusBar } from 'expo-status-bar';
 import {
   MessageCircle, Search, X, Plus, User, Users,
@@ -251,11 +253,7 @@ const MessagingScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchConversations();
-    const t = setInterval(() => fetchConversations(), 15000);
-    return () => clearInterval(t);
-  }, [fetchConversations]);
+  usePolling(fetchConversations, CONVERSATIONS_POLL_MS);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return conversations;

@@ -14,6 +14,7 @@ import PulseLogo from '../components/PulseLogo';
 import StaleBanner from '../components/StaleBanner';
 import { getDevices } from '../services/api';
 import { POLL_INTERVAL } from '../config';
+import { usePolling } from '../hooks/usePolling';
 import { themed, C, R, S, elevation, CHROME, DANGER_TEXT } from '../theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -258,11 +259,7 @@ const DevicesScreen = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchDevices();
-    const t = setInterval(() => fetchDevices(), POLL_INTERVAL);
-    return () => clearInterval(t);
-  }, [fetchDevices]);
+  usePolling(fetchDevices, POLL_INTERVAL);
 
   const counts = useMemo(() => {
     const c = { All: devices.length };

@@ -7,8 +7,21 @@
 // client via setApiBaseUrl() in api.js.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// How often screens auto-refresh data (milliseconds)
+// How often screens auto-refresh data (milliseconds).
+// These only tick while the relevant screen is focused AND the app is in the
+// foreground — see src/hooks/usePolling.js. Before that hook existed, every
+// interval below ran concurrently and forever, including in the background,
+// which was the app's single biggest battery cost.
 export const POLL_INTERVAL = 30000;
+
+// Chat is the one screen where a slow refresh is actually noticeable, so it
+// keeps the tightest interval. It is also the most expensive, which is why it
+// must not run unfocused.
+export const CHAT_POLL_MS          = 10000;
+export const CONVERSATIONS_POLL_MS = 15000;
+
+// Tab-bar unread/alert badges. App-wide, so this one is foreground-gated only.
+export const BADGE_POLL_MS = 30000;
 
 // AsyncStorage keys
 export const USER_STORAGE_KEY          = '@assetpulse_user';

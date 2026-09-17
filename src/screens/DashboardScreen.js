@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, RefreshControl,
   TouchableOpacity, ActivityIndicator,
@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { getDashboardStats, getDevices, getAlerts, getUnreadMessageCount } from '../services/api';
 import { POLL_INTERVAL } from '../config';
+import { usePolling } from '../hooks/usePolling';
 import {
   themed, C, R, S, elevation, CHROME, DANGER_TEXT,
   chromeGradient, tintGradient,
@@ -360,11 +361,7 @@ const DashboardScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-    const t = setInterval(() => fetchData(), POLL_INTERVAL);
-    return () => clearInterval(t);
-  }, [fetchData]);
+  usePolling(fetchData, POLL_INTERVAL);
 
 
   const navigateTo = useCallback((tab) => {

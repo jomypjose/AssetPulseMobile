@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Modal,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import {
-  ChevronLeft, Building2, Cpu, MonitorSmartphone, Network,
-  ChevronRight, Search as SearchIcon, X, ListPlus, Armchair,
+  ChevronLeft, Cpu, MonitorSmartphone, Network,
+  ChevronRight, Search as SearchIcon, X, ListPlus, Armchair, ScanLine, Plus,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getBranchAssets } from '../services/api';
@@ -26,19 +26,35 @@ const SectionRow = ({ title, more, onMore }) => (
   </View>
 );
 
-const Stat = ({ Icon, label, value, color }) => (
-  <View style={styles.statCol}>
-    <LinearGradient
-      colors={tintGradient(color)}
-      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-      style={styles.statIcon}
+/**
+ * A stat tile. Tapping it opens the branch's asset list filtered to that kind
+ * — the counts were previously dead text, which made them look like the
+ * obvious way to drill in and then did nothing. A zero tile is inert: there is
+ * nothing to show, so it stays flat rather than opening an empty list.
+ */
+const Stat = ({ Icon, label, value, color, onPress }) => {
+  const tappable = !!onPress && value > 0;
+  return (
+    <TouchableOpacity
+      style={styles.statCol}
+      onPress={tappable ? onPress : undefined}
+      disabled={!tappable}
+      activeOpacity={0.6}
+      accessibilityRole={tappable ? 'button' : undefined}
+      accessibilityLabel={tappable ? `Show ${value} ${label} assets` : undefined}
     >
-      <Icon color={color} size={16} strokeWidth={2.2} />
-    </LinearGradient>
-    <AnimatedCounter value={value} style={[styles.statValue, { color }]} />
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
+      <LinearGradient
+        colors={tintGradient(color)}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={styles.statIcon}
+      >
+        <Icon color={color} size={16} strokeWidth={2.2} />
+      </LinearGradient>
+      <AnimatedCounter value={value} style={[styles.statValue, { color }]} />
+      <Text style={styles.statLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
 
 /**
  * Renders a single asset row. Hardware, software, and network assets have
@@ -142,6 +158,18 @@ const BranchDetailScreen = ({ route, navigation }) => {
 
   const [query, setQuery] = useState('');
 
+  // Which asset kind to create. Sections only render when they already have
+  // rows, so a per-section "add" could never create the first asset of a kind
+  // — hence one chooser in the header.
+  const [showNewAsset, setShowNewAsset] = useState(false);
+
+  // Stat tile → the branch's asset list for that kind. Carries whatever is
+  // typed in the search box through, so tapping a count never silently drops
+  // the filter the user can see on screen.
+  const showKind = useCallback((kind) => {
+    navigation.navigate('BranchAssetsList', { branch, kind, initialQuery: query });
+  }, [navigation, branch, query]);
+
   const hardwareAll = data?.hardware || [];
   const softwareAll = data?.software || [];
   const networkAll  = data?.network  || [];
@@ -193,9 +221,24 @@ const BranchDetailScreen = ({ route, navigation }) => {
             {branch?.branch_name || ''}
           </Text>
         </View>
-        <View style={styles.iconChip}>
-          <Building2 color={C.primary} size={16} />
-        </View>
+        <TouchableOpacity
+          style={styles.iconChip}
+          onPress={() => setShowNewAsset(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Add an asset to this branch"
+        >
+          <Plus color={C.primary} size={16} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.iconChip}
+          onPress={() => navigation.navigate('Scanner', { branch })}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Verify assets at ${branch?.branch_code || 'this branch'}`}
+        >
+          <ScanLine color={C.primary} size={16} />
+        </TouchableOpacity>
       </LinearGradient>
 
       {loading ? (
@@ -212,10 +255,10 @@ const BranchDetailScreen = ({ route, navigation }) => {
         >
           {/* Stats */}
           <View style={styles.statsRow}>
-            <Stat Icon={Cpu}                label="Hardware"  value={hardwareAll.length} color={C.primary} />
-            <Stat Icon={MonitorSmartphone}  label="Software"  value={softwareAll.length} color={C.cyan} />
-            <Stat Icon={Network}            label="Network"   value={networkAll.length}  color={C.online} />
-            <Stat Icon={Armchair}           label="Fixed"     value={fixedAll.length}    color={C.purple} />
+            <Stat Icon={Cpu}               label="Hardware" value={hardwareAll.length} color={C.primary} onPress={() => showKind('hardware')} />
+            <Stat Icon={MonitorSmartphone} label="Software" value={softwareAll.length} color={C.cyan}    onPress={() => showKind('software')} />
+            <Stat Icon={Network}           label="Network"  value={networkAll.length}  color={C.online}  onPress={() => showKind('network')} />
+            <Stat Icon={Armchair}          label="Fixed"    value={fixedAll.length}    color={C.purple}  onPress={() => showKind('fixed')} />
           </View>
 
           {/* Search */}
@@ -320,9 +363,58 @@ const BranchDetailScreen = ({ route, navigation }) => {
           )}
         </ScrollView>
       )}
+
+      {/* Which kind of asset to create. All four go to the same form screen,
+          which adapts its fields to the kind. */}
+      <Modal
+        visible={showNewAsset}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNewAsset(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHead}>
+              <Text style={styles.modalTitle}>
+                New asset at {branch?.branch_code}
+              </Text>
+              <TouchableOpacity onPress={() => setShowNewAsset(false)} activeOpacity={0.7}>
+                <X color={C.textDim} size={18} />
+              </TouchableOpacity>
+            </View>
+            {NEW_ASSET_KINDS.map(({ kind, label, Icon, tone }) => (
+              <TouchableOpacity
+                key={kind}
+                style={styles.kindRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowNewAsset(false);
+                  navigation.navigate('AssetForm', { kind, branch });
+                }}
+              >
+                <Icon color={C[tone]} size={16} />
+                <Text style={styles.kindLabel}>{label}</Text>
+                <ChevronRight color={C.textDim} size={16} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
+
+// Order mirrors the stat row above, so the two read the same way.
+//
+// `tone` is a token NAME, not a colour: applyTheme() mutates C in place, so a
+// colour captured at module load would keep the palette the app started with
+// and go stale the moment the user switches theme.
+const NEW_ASSET_KINDS = [
+  { kind: 'hardware', label: 'Hardware asset', Icon: Cpu,               tone: 'primary' },
+  { kind: 'software', label: 'Software asset', Icon: MonitorSmartphone, tone: 'cyan' },
+  { kind: 'network',  label: 'Network device', Icon: Network,           tone: 'online' },
+  { kind: 'fixed',    label: 'Fixed asset',    Icon: Armchair,          tone: 'purple' },
+];
 
 const InfoRow = ({ label, value, last }) => (
   <View style={[styles.infoRow, last && { borderBottomWidth: 0 }]}>
@@ -332,6 +424,24 @@ const InfoRow = ({ label, value, last }) => (
 );
 
 const styles = themed(() => ({
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, paddingBottom: S.xl,
+  },
+  modalHead: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: S.lg, paddingVertical: S.md,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  modalTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: C.text },
+  kindRow: {
+    flexDirection: 'row', alignItems: 'center', gap: S.md,
+    paddingHorizontal: S.lg, paddingVertical: S.md,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  kindLabel: { flex: 1, fontSize: 13, fontWeight: '600', color: C.text },
+
   root: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,

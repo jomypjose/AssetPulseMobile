@@ -14,6 +14,7 @@ import {
 import { getAlerts, acknowledgeAlerts } from '../services/api';
 import StaleBanner from '../components/StaleBanner';
 import { POLL_INTERVAL } from '../config';
+import { usePolling } from '../hooks/usePolling';
 import { themed, C, R, S, cardShadow, elevation, CHROME, DANGER_TEXT } from '../theme';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -443,11 +444,7 @@ const AlertsScreen = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAlerts();
-    const t = setInterval(() => fetchAlerts(), POLL_INTERVAL);
-    return () => clearInterval(t);
-  }, [fetchAlerts]);
+  usePolling(fetchAlerts, POLL_INTERVAL);
 
   // Animate bulk action bar
   useEffect(() => {

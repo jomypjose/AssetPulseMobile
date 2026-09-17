@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  Alert, Linking, TextInput,
+  Alert, Linking, TextInput, Modal, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { ChevronLeft, ScanLine, Camera as CameraIcon, Keyboard } from 'lucide-react-native';
+import {
+  ChevronLeft, ScanLine, Camera as CameraIcon, Keyboard,
+  Building2, CheckCircle2, AlertTriangle, X as XIcon,
+} from 'lucide-react-native';
 import { themed, C, R, S, elevation, CHROME } from '../theme';
 import { globalSearch, getHardwareAssetById, uploadAssetPhoto } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { classifyScan, applyRelocation, recordSurplus } from '../services/assetVerification';
 
 // Lazy-load expo-camera so the app still runs if the native module is missing.
 let Camera = null;
@@ -41,8 +46,23 @@ const attachAssetPhoto = async (hardwareId) => {
   }
 };
 
-const ScannerScreen = ({ navigation }) => {
+const ScannerScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  // Which branch a scan is being checked against.
+  //
+  // Opened from a branch page, that branch is the target. Otherwise it falls
+  // back to the user's own first branch — the same default DailyJobs and
+  // TicketsHub already use — and can be changed or switched off from the bar
+  // at the top. With no target, scanning keeps its original behaviour of just
+  // showing the asset's details.
+  const branchParam = route?.params?.branch || null;
+  const myBranches = user?.branches || [];
+  const [verifyBranch, setVerifyBranch] = useState(
+    branchParam || myBranches[0] || null,
+  );
+  const [showBranchPicker, setShowBranchPicker] = useState(false);
 
   const [perm, setPerm] = useState(null);     // 'granted' | 'denied' | null
   const [scanned, setScanned] = useState(false);
@@ -61,6 +81,125 @@ const ScannerScreen = ({ navigation }) => {
       setPerm(status);
     })();
   }, []);
+
+  /**
+   * Check a resolved asset against the verification branch and act on the
+   * outcome. Returns true if it handled the scan (so the caller skips the
+   * plain details alert), false to fall through.
+   */
+  const runVerification = useCallback(async (asset, kind) => {
+    const target = verifyBranch;
+    if (!target?.branch_code || !asset?.id) return false;
+
+    let outcome;
+    try {
+      outcome = await classifyScan({ asset, kind, branchCode: target.branch_code });
+    } catch (err) {
+      Alert.alert('Verification failed', err?.message || 'Could not verify this asset.');
+      return true;
+    }
+
+    const where = [target.branch_code, target.branch_name].filter(Boolean).join(' · ');
+    const label = asset.item_id || asset.serial_number || `#${asset.id}`;
+
+    // Audit running: the item was ticked off as FOUND already.
+    if (outcome.mode === 'audit' && outcome.action === 'found') {
+      Alert.alert('Verified ✓', `${label} marked FOUND in the audit for ${where}.`);
+      return true;
+    }
+
+    // Audit running, asset not in the snapshot — it does not belong here.
+    if (outcome.mode === 'audit' && outcome.action === 'surplus') {
+      if (!outcome.serial) {
+        Alert.alert(
+          'Cannot record',
+          `${label} is not in the audit for ${where}, and has no serial number — `
+          + 'the audit needs one to record a surplus find. Add a serial to the asset first.',
+        );
+        return true;
+      }
+      Alert.alert(
+        'Not in this audit',
+        `${label} is not on the checklist for ${where}.\n\n`
+        + 'Record it as a surplus find? The asset record is left unchanged — '
+        + 'the audit approval decides what happens to it.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Record surplus',
+            onPress: async () => {
+              try {
+                await recordSurplus(outcome.audit, asset, kind);
+                Alert.alert('Recorded', `${label} logged as a surplus find.`);
+              } catch (err) {
+                Alert.alert('Failed', err?.message || 'Could not record the surplus find.');
+              }
+            },
+          },
+        ],
+      );
+      return true;
+    }
+
+    if (outcome.mode === 'audit' && outcome.action === 'error') {
+      Alert.alert('Audit error', outcome.error || 'Could not update the audit.');
+      return true;
+    }
+
+    // No audit: already recorded here.
+    if (outcome.mode === 'direct' && outcome.action === 'confirmed') {
+      Alert.alert('Confirmed ✓', `${label} is recorded at ${where}.`);
+      return true;
+    }
+
+    // No audit: recorded elsewhere. Offer to move it.
+    if (outcome.mode === 'direct' && outcome.action === 'relocate') {
+      const isHardware = kind === 'hardware' || kind === 'fixed';
+      const from = outcome.from
+        ? `is listed at ${outcome.from}`
+        : 'has no branch recorded';
+
+      if (!isHardware) {
+        Alert.alert(
+          'Branch mismatch',
+          `${label} ${from}, not ${where}.\n\n`
+          + `Moving ${kind} assets from the scanner is not supported — `
+          + 'change it from the asset page.',
+        );
+        return true;
+      }
+
+      Alert.alert(
+        'Branch mismatch',
+        `${label} ${from}.\n\nMove it to ${where}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Move here',
+            onPress: async () => {
+              try {
+                // The update endpoint rewrites every field it is given and
+                // nulls the dates it is not, so relocation needs the asset's
+                // full current record — a search hit is not enough.
+                let full = asset;
+                try {
+                  const r = await getHardwareAssetById(asset.id);
+                  full = r?.data || r || asset;
+                } catch { /* fall back to what we have */ }
+                await applyRelocation(full, kind, target.branch_code, target.branch_name);
+                Alert.alert('Moved', `${label} is now recorded at ${where}.`);
+              } catch (err) {
+                Alert.alert('Move failed', err?.message || 'Could not update the asset.');
+              }
+            },
+          },
+        ],
+      );
+      return true;
+    }
+
+    return false;
+  }, [verifyBranch]);
 
   const resolveCode = useCallback(async (raw) => {
     if (!raw || cooldownRef.current) return;
@@ -110,6 +249,10 @@ const ScannerScreen = ({ navigation }) => {
       }
 
       if (directHit) {
+        // Verification takes precedence: when a branch is targeted, a scan is
+        // a presence check, not a lookup.
+        if (await runVerification(directHit, 'hardware')) return;
+
         const assignee = directHit.emp_name
           ? `👤 ${directHit.emp_name}${directHit.emp_code ? ` (${directHit.emp_code})` : ''}`
           : '👤 Unassigned';
@@ -136,8 +279,12 @@ const ScannerScreen = ({ navigation }) => {
       }
 
       if (firstResult) {
-        // Network device → navigate straight to its DeviceDetail
         if (firstResult.type === 'network' && firstResult.id) {
+          // startAudit() snapshots network assets too, so a network scan is a
+          // valid presence check — verify before navigating away, or an audit
+          // could never tick off a switch or router.
+          if (await runVerification({ ...(firstResult.details || {}), id: firstResult.id }, 'network')) return;
+
           navigation.replace('DeviceDetail', {
             deviceId: firstResult.id,
             deviceIp: firstResult.details?.ip_address || firstResult.title,
@@ -145,6 +292,17 @@ const ScannerScreen = ({ navigation }) => {
           return;
         }
         const d = firstResult.details || {};
+
+        // Search results carry an id and a partial record, which is enough to
+        // classify; the relocation path refetches the full asset before it
+        // writes anything.
+        if (['hardware', 'software'].includes(firstResult.type) && typeof firstResult.id === 'number') {
+          const kind = firstResult.type === 'hardware'
+            ? 'hardware'
+            : 'software';
+          if (await runVerification({ ...d, id: firstResult.id }, kind)) return;
+        }
+
         const assignee = d.emp_name
           ? `👤 ${d.emp_name}${d.emp_code ? ` (${d.emp_code})` : ''}`
           : '👤 Unassigned';
@@ -182,7 +340,7 @@ const ScannerScreen = ({ navigation }) => {
       setBusy(false);
       setTimeout(() => { cooldownRef.current = false; setScanned(false); }, 1500);
     }
-  }, [navigation]);
+  }, [navigation, runVerification]);
 
   const handleBarCode = ({ data }) => {
     if (scanned) return;
@@ -261,15 +419,110 @@ const ScannerScreen = ({ navigation }) => {
           <ChevronLeft color={CHROME.text} size={22} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Scan asset</Text>
-          <Text style={styles.headerSub}>QR or barcode</Text>
+          <Text style={styles.headerTitle}>
+            {verifyBranch ? 'Verify assets' : 'Scan asset'}
+          </Text>
+          <Text style={styles.headerSub}>
+            {verifyBranch ? 'Scan to confirm presence' : 'QR or barcode'}
+          </Text>
         </View>
         <View style={styles.iconChip}>
           <ScanLine color={C.primary} size={16} />
         </View>
       </View>
 
+      {/* Verification target. Always visible so it is never ambiguous which
+          branch a scan is being checked against — a scan that silently
+          relocated an asset to the wrong branch would be worse than no
+          verification at all. */}
+      <View style={styles.verifyBar}>
+        {verifyBranch ? (
+          <>
+            <CheckCircle2 color={C.online} size={14} />
+            <Text style={styles.verifyText} numberOfLines={1}>
+              Verifying at{' '}
+              <Text style={styles.verifyStrong}>{verifyBranch.branch_code}</Text>
+              {verifyBranch.branch_name ? ` · ${verifyBranch.branch_name}` : ''}
+            </Text>
+          </>
+        ) : (
+          <>
+            <AlertTriangle color={C.textDim} size={14} />
+            <Text style={styles.verifyText} numberOfLines={1}>
+              Lookup only — no branch selected
+            </Text>
+          </>
+        )}
+        {myBranches.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setShowBranchPicker(true)}
+            activeOpacity={0.7}
+            style={styles.verifyAction}
+          >
+            <Text style={styles.verifyActionText}>
+              {verifyBranch ? 'Change' : 'Set branch'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {renderBody()}
+
+      {/* Branch picker — sourced from the user's own scope, which login
+          already returns, so there is no extra request and no branch the user
+          is not allowed to touch. */}
+      <Modal
+        visible={showBranchPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowBranchPicker(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHead}>
+              <Building2 color={C.primary} size={16} />
+              <Text style={styles.modalTitle}>Verify against</Text>
+              <TouchableOpacity onPress={() => setShowBranchPicker(false)} activeOpacity={0.7}>
+                <XIcon color={C.textDim} size={18} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.branchRow}
+              activeOpacity={0.7}
+              onPress={() => { setVerifyBranch(null); setShowBranchPicker(false); }}
+            >
+              <Text style={styles.branchOff}>Lookup only (no verification)</Text>
+            </TouchableOpacity>
+
+            <FlatList
+              data={myBranches}
+              keyExtractor={(b) => String(b.branch_code)}
+              style={{ maxHeight: 340 }}
+              renderItem={({ item }) => {
+                const active = item.branch_code === verifyBranch?.branch_code;
+                return (
+                  <TouchableOpacity
+                    style={styles.branchRow}
+                    activeOpacity={0.7}
+                    onPress={() => { setVerifyBranch(item); setShowBranchPicker(false); }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.branchCode, active && { color: C.primary }]}>
+                        {item.branch_code}
+                      </Text>
+                      {!!item.branch_name && (
+                        <Text style={styles.branchName} numberOfLines={1}>{item.branch_name}</Text>
+                      )}
+                    </View>
+                    {active && <CheckCircle2 color={C.primary} size={16} />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {showManual && (
         <View style={styles.manualSheet}>
@@ -302,6 +555,43 @@ const ScannerScreen = ({ navigation }) => {
 
 const styles = themed(() => ({
   root: { flex: 1, backgroundColor: '#000' },
+
+  // ── Verification bar + branch picker ──
+  verifyBar: {
+    flexDirection: 'row', alignItems: 'center', gap: S.xs,
+    paddingHorizontal: S.md, paddingVertical: S.sm,
+    backgroundColor: CHROME.bg,
+    borderBottomWidth: 1, borderBottomColor: CHROME.border,
+  },
+  verifyText:   { flex: 1, fontSize: 12, color: C.textMuted },
+  verifyStrong: { color: C.text, fontWeight: '700' },
+  verifyAction: {
+    paddingHorizontal: S.sm, paddingVertical: 4,
+    borderRadius: R.xs, borderWidth: 1, borderColor: CHROME.buttonBorder,
+    backgroundColor: CHROME.buttonBg,
+  },
+  verifyActionText: { fontSize: 11, fontWeight: '700', color: C.primary },
+
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg,
+    paddingBottom: S.xl, ...elevation(3),
+  },
+  modalHead: {
+    flexDirection: 'row', alignItems: 'center', gap: S.sm,
+    paddingHorizontal: S.lg, paddingVertical: S.md,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  modalTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: C.text },
+  branchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: S.sm,
+    paddingHorizontal: S.lg, paddingVertical: S.md,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  branchCode: { fontSize: 13, fontWeight: '700', color: C.text },
+  branchName: { fontSize: 11, color: C.textMuted, marginTop: 1 },
+  branchOff:  { fontSize: 13, color: C.textMuted, fontWeight: '600' },
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,

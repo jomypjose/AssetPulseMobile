@@ -640,9 +640,21 @@ export const closeJob = async (id, solution_description) => {
 };
 
 // ─── Global search (AI) ──────────────────────────────────────────────────────
+// The server puts its own configuration notice — "AI provider not configured.
+// Please add the API key in Settings → AI Providers." — into the same `answer`
+// field it uses for real answers. Rendered as-is, that surfaces to users as an
+// API-key error inside an "Answer" card, which reads like a broken app rather
+// than an unconfigured optional feature. Treat it as "no answer" and let the
+// plain search results stand on their own.
+const AI_UNCONFIGURED = /AI provider not configured/i;
+
 export const globalSearch = async (query) => {
   const response = await api.get('/search', { params: { q: query } });
-  return response.data;
+  const data = response.data || {};
+  if (typeof data.answer === 'string' && AI_UNCONFIGURED.test(data.answer)) {
+    return { ...data, answer: '', aiUnavailable: true };
+  }
+  return data;
 };
 
 // ─── Expiry digest ───────────────────────────────────────────────────────────
@@ -720,6 +732,134 @@ export const resolveAlert = async (id) => {
 export const registerPushToken = async (token) => {
   const response = await api.put('/auth/push-token', { token });
   return response.data;
+};
+
+// ─── Asset audits (QR verification) ──────────────────────────────────────────
+// The server models a branch audit as: schedule → start (which snapshots every
+// hardware and network asset at that branch into audit_items) → verify each
+// item FOUND / MISSING / DAMAGED → finalize → approve.
+//
+// audit_items.asset_type is the CATEGORY ('hardware' | 'network'), not the
+// asset's own type string, and asset_id is only unique within its category —
+// hardware #5 and network #5 are different assets. Always match on both.
+// Software is deliberately not snapshotted by the server, so software scans
+// have no audit path and fall through to direct branch confirmation.
+
+/**
+ * Audits visible to the current user, newest first.
+ * @param {{ status?: string, branch_code?: string }} [params]
+ * @returns {Promise<Array>} audits, each including `branch` and `auditor`
+ */
+export const getAudits = async (params = {}) => {
+  const response = await api.get('/audits', { params });
+  return response.data?.audits || [];
+};
+
+/**
+ * The single audit currently open for a branch, or null.
+ * IN_PROGRESS is the only state where items can be verified — PENDING audits
+ * have not been started (no items snapshotted yet) and COMPLETED/APPROVED ones
+ * reject edits server-side.
+ */
+export const getActiveAuditForBranch = async (branchCode) => {
+  if (!branchCode) return null;
+  const audits = await getAudits({ status: 'IN_PROGRESS', branch_code: branchCode });
+  return audits[0] || null;
+};
+
+/**
+ * Checklist for an audit.
+ * @returns {Promise<{ items: Array, audit: object }>} each item carries
+ *          `details` (brand/model/serial) resolved from its source table.
+ */
+export const getAuditItems = async (auditId) => {
+  const response = await api.get(`/audits/${auditId}/items`);
+  return { items: response.data?.items || [], audit: response.data?.audit || null };
+};
+
+/**
+ * Record a verification result against one checklist item.
+ * @param {number} itemId  audit_items.id (NOT the asset id)
+ * @param {'PENDING'|'FOUND'|'MISSING'|'DAMAGED'} auditStatus
+ */
+export const updateAuditItem = async (itemId, auditStatus, remarks) => {
+  const response = await api.put(`/audits/items/${itemId}`, {
+    audit_status: auditStatus,
+    ...(remarks ? { remarks } : {}),
+  });
+  return response.data;
+};
+
+/**
+ * Log an asset found at the branch that the snapshot did not expect.
+ * The server requires a serial number — it is the only identifier a surplus
+ * find is guaranteed to have.
+ */
+export const addAuditSurplusItem = async (auditId, { serial_number, asset_type, remarks }) => {
+  const response = await api.post(`/audits/${auditId}/surplus`, {
+    serial_number, asset_type, remarks,
+  });
+  return response.data;
+};
+
+/**
+ * Asset types for a category, used to populate the type picker.
+ * @param {'hardware'|'fixed'|'software'|'network'} category
+ * @returns {Promise<Array<{id:number,name:string,category:string,is_active:boolean}>>}
+ */
+export const getAssetTypes = async (category) => {
+  const response = await api.get('/asset-types', {
+    params: { ...(category ? { category } : {}), active: 'true' },
+  });
+  return response.data?.asset_types || [];
+};
+
+// ─── Asset writes ────────────────────────────────────────────────────────────
+// Fixed assets are hardware_assets rows whose asset_type belongs to the
+// server's `fixed` category — same endpoints as hardware, the category is
+// decided by the asset_type value. Software and network have their own tables
+// and routes. All four require the matching write permission server-side, so a
+// 403 here means the signed-in role cannot edit that kind.
+
+export const createHardwareAsset = async (payload) => {
+  const response = await api.post('/hardware', payload);
+  return response.data;
+};
+
+export const updateHardwareAsset = async (id, payload) => {
+  const response = await api.put(`/hardware/${id}`, payload);
+  return response.data;
+};
+
+export const createSoftwareAsset = async (payload) => {
+  const response = await api.post('/software', payload);
+  return response.data;
+};
+
+export const updateSoftwareAsset = async (id, payload) => {
+  const response = await api.put(`/software/${id}`, payload);
+  return response.data;
+};
+
+export const createNetworkAsset = async (payload) => {
+  const response = await api.post('/network', payload);
+  return response.data;
+};
+
+export const updateNetworkAsset = async (id, payload) => {
+  const response = await api.put(`/network/${id}`, payload);
+  return response.data;
+};
+
+/**
+ * Kind → { create, update } so one form screen can serve all four asset kinds
+ * without branching at every call site.
+ */
+export const ASSET_WRITERS = {
+  hardware: { create: createHardwareAsset, update: updateHardwareAsset },
+  fixed:    { create: createHardwareAsset, update: updateHardwareAsset },
+  software: { create: createSoftwareAsset, update: updateSoftwareAsset },
+  network:  { create: createNetworkAsset,  update: updateNetworkAsset  },
 };
 
 export default api;

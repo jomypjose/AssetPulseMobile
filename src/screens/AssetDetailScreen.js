@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import {
   ChevronLeft, User, Tag, Hash, Layers, Building2, Calendar,
   KeyRound, ShieldCheck, Camera as CameraIcon, Package, MonitorSmartphone,
-  Armchair,
+  Armchair, Pencil,
 } from 'lucide-react-native';
 import {
   getHardwareAssetById, getSoftwareAssetById, uploadAssetPhoto,
@@ -137,6 +137,21 @@ const AssetDetailScreen = ({ route, navigation }) => {
               {asset.asset_status}
             </Text>
           </View>
+        )}
+
+        {/* Edit needs the fully-loaded record, not the list row this screen
+            may have been opened with — the update endpoint rewrites every
+            field it is handed, so a partial record would erase the rest. */}
+        {!!asset?.id && (
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => navigation.navigate('AssetForm', { kind, asset })}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Edit this asset"
+          >
+            <Pencil color={C.primary} size={15} />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -271,6 +286,11 @@ const styles = themed(() => ({
   },
   headerCenter: { flex: 1 },
   headerTitle:  { fontSize: 16, fontWeight: '700', color: CHROME.text },
+  editBtn: {
+    width: 34, height: 34, borderRadius: R.sm, marginLeft: S.xs,
+    backgroundColor: CHROME.buttonBg, borderWidth: 1, borderColor: CHROME.buttonBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
   headerSub:    { fontSize: 11, color: CHROME.textMuted, marginTop: 2 },
   statusChip: {
     paddingHorizontal: S.sm, paddingVertical: 5,

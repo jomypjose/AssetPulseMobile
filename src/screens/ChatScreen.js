@@ -11,6 +11,8 @@ import {
   Camera, FileText, X, File, Download, Eye,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { CHAT_POLL_MS } from '../config';
+import { usePolling } from '../hooks/usePolling';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   getConversationMessages, sendDirectMessage,
@@ -382,11 +384,7 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [userId, user]);
 
-  useEffect(() => {
-    fetchMessages();
-    const t = setInterval(fetchMessages, 10000);
-    return () => clearInterval(t);
-  }, [fetchMessages]);
+  usePolling(fetchMessages, CHAT_POLL_MS);
 
   useEffect(() => {
     if (messages.length > 0 && isNearBottomRef.current) {

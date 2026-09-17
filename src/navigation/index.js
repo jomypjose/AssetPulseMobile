@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -13,6 +13,8 @@ import {
   checkMessages, seedMessages, addActionListener,
 } from '../services/NotificationService';
 import { themed, C, R, S, CHROME } from '../theme';
+import { BADGE_POLL_MS } from '../config';
+import { useAppStatePolling } from '../hooks/usePolling';
 
 // Screens
 import ServerSetupScreen   from '../screens/ServerSetupScreen';
@@ -34,6 +36,7 @@ import BranchesScreen      from '../screens/BranchesScreen';
 import BranchDetailScreen     from '../screens/BranchDetailScreen';
 import BranchAssetsListScreen from '../screens/BranchAssetsListScreen';
 import AssetDetailScreen      from '../screens/AssetDetailScreen';
+import AssetFormScreen        from '../screens/AssetFormScreen';
 import ExpiryScreen           from '../screens/ExpiryScreen';
 
 // Icons
@@ -61,6 +64,7 @@ const DashboardNavigator = () => (
     <DashboardStack.Screen name="BranchDetail"  component={BranchDetailScreen} />
     <DashboardStack.Screen name="BranchAssetsList" component={BranchAssetsListScreen} />
     <DashboardStack.Screen name="AssetDetail"   component={AssetDetailScreen} />
+    <DashboardStack.Screen name="AssetForm"     component={AssetFormScreen} />
     <DashboardStack.Screen name="Expiry"        component={ExpiryScreen} />
     <DashboardStack.Screen name="DeviceDetail"  component={DeviceDetailScreen} />
   </DashboardStack.Navigator>
@@ -94,6 +98,7 @@ const ProfileNavigator = () => (
     <ProfileStack.Screen name="BranchDetail" component={BranchDetailScreen} />
     <ProfileStack.Screen name="BranchAssetsList" component={BranchAssetsListScreen} />
     <ProfileStack.Screen name="AssetDetail" component={AssetDetailScreen} />
+    <ProfileStack.Screen name="AssetForm"   component={AssetFormScreen} />
     <ProfileStack.Screen name="Expiry"      component={ExpiryScreen} />
     <ProfileStack.Screen name="DeviceDetail" component={DeviceDetailScreen} />
   </ProfileStack.Navigator>
@@ -122,7 +127,11 @@ const ti = themed(() => ({
 const MainNavigator = ({ user }) => {
   const [unackedAlerts, setUnackedAlerts] = useState(0);
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
-  const seededRef = useRef(false);
+  // Which user's messages have been seeded. Seeding marks existing messages as
+  // already-seen so they aren't announced as new; keying it to the user id
+  // means a different account signing in re-seeds instead of firing a
+  // notification for every message already in their inbox.
+  const seededForRef = useRef(null);
   const insets = useSafeAreaInsets();
 
   const tabBarStyle = {
@@ -144,35 +153,36 @@ const MainNavigator = ({ user }) => {
     return off;
   }, []);
 
-  useEffect(() => {
-    const poll = async (isFirst = false) => {
-      try {
-        const [alertData, convData, msgData] = await Promise.all([
-          getAlerts(),
-          getConversations().catch(() => []),
-          getUnreadMessageCount().catch(() => ({ count: 0 })),
-        ]);
+  const pollBadges = useCallback(async () => {
+    const isFirst = seededForRef.current !== user?.id;
+    try {
+      const [alertData, convData, msgData] = await Promise.all([
+        getAlerts(),
+        getConversations().catch(() => []),
+        getUnreadMessageCount().catch(() => ({ count: 0 })),
+      ]);
 
-        const alerts = alertData.alerts || [];
-        const convs  = convData || [];
+      const alerts = alertData.alerts || [];
+      const convs  = convData || [];
 
-        // Alert notifications are delivered via server push (see monitoring.js)
-        // to avoid duplicate notifications; the client only handles messages here.
-        if (isFirst) {
-          seedMessages(convs, user?.id);
-          seededRef.current = true;
-        } else if (seededRef.current) {
-          await checkMessages(convs, user?.id);
-        }
+      // Alert notifications are delivered via server push (see monitoring.js)
+      // to avoid duplicate notifications; the client only handles messages here.
+      if (isFirst) {
+        seedMessages(convs, user?.id);
+        seededForRef.current = user?.id;
+      } else {
+        await checkMessages(convs, user?.id);
+      }
 
-        setUnackedAlerts(alerts.filter((a) => !a.is_acknowledged).length);
-        setUnreadMsgs(msgData.count || 0);
-      } catch { /* silently ignore */ }
-    };
-    poll(true);
-    const t = setInterval(() => poll(false), 30000);
-    return () => clearInterval(t);
+      setUnackedAlerts(alerts.filter((a) => !a.is_acknowledged).length);
+      setUnreadMsgs(msgData.count || 0);
+    } catch { /* silently ignore */ }
   }, [user]);
+
+  // Foreground-only: these three requests fired every 30s around the clock
+  // before, even with the app backgrounded for hours. Focus-agnostic because
+  // this drives the tab badges and there is no screen here to be focused.
+  useAppStatePolling(pollBadges, BADGE_POLL_MS, { enabled: !!user });
 
   return (
     <Tab.Navigator
