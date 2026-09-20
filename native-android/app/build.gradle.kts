@@ -29,6 +29,13 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            // The Expo build ships under the same applicationId and is signed
+            // with a different key, so a debug install would be refused (and
+            // uninstalling it would take the user's saved server + session
+            // with it). A suffix lets the rewrite sit side by side with the
+            // current app while it is being ported. Release keeps the real id.
+            applicationIdSuffix = ".native"
+            versionNameSuffix = "-native"
         }
     }
 

@@ -1,0 +1,7 @@
+<resources>
+    <!--
+      Debug builds install alongside the Expo app (see applicationIdSuffix in
+      build.gradle.kts), so the launcher needs to tell the two apart.
+    -->
+    <string name="app_name">AssetPulse Native</string>
+</resources>
