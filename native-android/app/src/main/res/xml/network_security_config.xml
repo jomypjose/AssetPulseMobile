@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is refused, matching the Expo app's ServerSetupScreen, which
+  rewrites any http:// address the user types to https:// on purpose:
+  credentials and bearer tokens travel to this host on every request, so a
+  spoofed or MITM'd host on the same network must not be able to harvest a
+  login in cleartext.
+
+  User-installed CAs are trusted so on-prem deployments behind a corporate
+  or self-signed root still work over TLS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

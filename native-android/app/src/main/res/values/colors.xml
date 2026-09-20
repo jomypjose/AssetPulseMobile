@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors app.config.js splash.backgroundColor -->
+    <color name="splash_background">#080d17</color>
+    <!-- Mirrors CHROME.bg in src/theme.js (always-dark app chrome) -->
+    <color name="chrome_background">#0b1220</color>
+    <!-- Mirrors android.adaptiveIcon.backgroundColor -->
+    <color name="ic_launcher_background">#0f172a</color>
+</resources>

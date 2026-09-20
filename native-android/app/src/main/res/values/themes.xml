@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Pre-Compose splash theme. Background matches the Expo app's splash
+      (#080d17) so the hand-off into the Compose UI has no white flash.
+    -->
+    <style name="Theme.AssetPulse.Splash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@color/chrome_background</item>
+        <item name="android:navigationBarColor">@color/chrome_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
