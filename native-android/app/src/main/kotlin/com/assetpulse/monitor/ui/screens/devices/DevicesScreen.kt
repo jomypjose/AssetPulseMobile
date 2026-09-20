@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetpulse.monitor.data.local.OfflineCache
 import com.assetpulse.monitor.data.model.DeviceStatus
 import com.assetpulse.monitor.ui.components.EmptyState
+import com.assetpulse.monitor.ui.components.LoadingState
 import com.assetpulse.monitor.ui.components.ErrorBanner
 import com.assetpulse.monitor.ui.components.StaleBanner
 import com.assetpulse.monitor.ui.screens.dashboard.DeviceRow
@@ -124,7 +125,9 @@ fun DevicesScreen(
             }
 
             val visible = state.visibleDevices
-            if (visible.isEmpty() && !state.isLoading) {
+            if (state.isLoading && state.devices.isEmpty()) {
+                item { LoadingState("Loading devices…") }
+            } else if (visible.isEmpty()) {
                 item {
                     EmptyState(
                         icon = Icons.Filled.Dns,

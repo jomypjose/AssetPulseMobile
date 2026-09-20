@@ -9,6 +9,7 @@ import com.assetpulse.monitor.data.remote.toApiException
 import com.assetpulse.monitor.data.repository.MonitoringRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,16 +41,24 @@ class DashboardViewModel @Inject constructor(
             try {
                 // Stats, devices and alerts are independent; fetch together so
                 // a tick costs one round trip's latency rather than three.
-                val statsJob = async { runCatching { repository.getDashboardStats() }.getOrNull() }
-                val devicesJob = async { repository.getDevices() }
-                val alertsJob = async { repository.getAlerts() }
-
-                val devices = devicesJob.await()
-                val alerts = alertsJob.await()
+                //
+                // The `async` calls MUST be inside a `coroutineScope`. Bare
+                // `async` children report their failure straight to the parent
+                // job, which crashes the process even when the caller catches
+                // at `await()`. `coroutineScope` contains that: it cancels the
+                // siblings and rethrows here, where the catch below turns it
+                // into an error banner.
+                val result = coroutineScope {
+                    val statsJob = async { runCatching { repository.getDashboardStats() }.getOrNull() }
+                    val devicesJob = async { repository.getDevices() }
+                    val alertsJob = async { repository.getAlerts() }
+                    Triple(statsJob.await(), devicesJob.await(), alertsJob.await())
+                }
+                val (stats, devices, alerts) = result
 
                 _state.value = DashboardState(
                     isLoading = false,
-                    stats = statsJob.await() ?: _state.value.stats,
+                    stats = stats ?: _state.value.stats,
                     devices = devices.value,
                     alerts = alerts.value,
                     staleSince = devices.staleSince ?: alerts.staleSince,

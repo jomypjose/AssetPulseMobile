@@ -1,6 +1,7 @@
 package com.assetpulse.monitor.data.model
 
 import kotlinx.serialization.SerialName
+
 import kotlinx.serialization.Serializable
 
 /** Live status as the backend reports it on a monitored network device. */
@@ -27,8 +28,10 @@ enum class DeviceStatus { ONLINE, WARNING, OFFLINE, UNKNOWN;
 @Serializable
 data class DeviceExtra(
     @SerialName("cpu_count") val cpuCount: Int? = null,
-    @SerialName("memory_used") val memoryUsed: Long? = null,
-    @SerialName("memory_total") val memoryTotal: Long? = null,
+    @SerialName("memory_used")
+    @Serializable(with = LenientLongSerializer::class) val memoryUsed: Long? = null,
+    @SerialName("memory_total")
+    @Serializable(with = LenientLongSerializer::class) val memoryTotal: Long? = null,
 )
 
 @Serializable
@@ -41,13 +44,17 @@ data class Device(
     @SerialName("monitoring_status") val monitoringStatus: String? = null,
     @SerialName("enable_monitoring") val enableMonitoring: Boolean? = null,
     @SerialName("maintenance_mode") val maintenanceMode: Boolean? = null,
-    @SerialName("cpu_usage") val cpuUsage: Double? = null,
-    @SerialName("memory_used") val memoryUsed: Long? = null,
-    @SerialName("memory_total") val memoryTotal: Long? = null,
-    val latency: Double? = null,
+    @SerialName("cpu_usage")
+    @Serializable(with = LenientDoubleSerializer::class) val cpuUsage: Double? = null,
+    @SerialName("memory_used")
+    @Serializable(with = LenientLongSerializer::class) val memoryUsed: Long? = null,
+    @SerialName("memory_total")
+    @Serializable(with = LenientLongSerializer::class) val memoryTotal: Long? = null,
+    @Serializable(with = LenientDoubleSerializer::class) val latency: Double? = null,
     @SerialName("last_seen") val lastSeen: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
-    @SerialName("snmp_uptime") val snmpUptime: Long? = null,
+    // Already human-formatted by the server, e.g. "53d 9h 12m 44s".
+    @SerialName("snmp_uptime") val snmpUptime: String? = null,
     @SerialName("branch_code") val branchCode: String? = null,
     val extra: DeviceExtra? = null,
 ) {
@@ -82,6 +89,21 @@ data class DeviceDetailResponse(
     val device: Device? = null,
 )
 
+/**
+ * The device an alert was raised against. `/alerts` embeds this as an object
+ * (not a name string), and the RN detail sheet read `sys_name`, `ip_address`,
+ * `category` and `branch_name` off it.
+ */
+@Serializable
+data class AlertNetworkAsset(
+    val id: Int? = null,
+    @SerialName("item_id") val itemId: String? = null,
+    @SerialName("sys_name") val sysName: String? = null,
+    @SerialName("ip_address") val ipAddress: String? = null,
+    val category: String? = null,
+    @SerialName("branch_name") val branchName: String? = null,
+)
+
 @Serializable
 data class Alert(
     val id: Int,
@@ -94,7 +116,7 @@ data class Alert(
     @SerialName("device_name") val deviceName: String? = null,
     @SerialName("device_ip") val deviceIp: String? = null,
     @SerialName("branch_name") val branchName: String? = null,
-    @SerialName("network_asset") val networkAsset: String? = null,
+    @SerialName("network_asset") val networkAsset: AlertNetworkAsset? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("resolved_at") val resolvedAt: String? = null,
 ) {
@@ -106,6 +128,20 @@ data class Alert(
         get() = status == "acknowledged" || status == "resolved"
 
     val severityKey: String get() = severity?.lowercase() ?: "unknown"
+
+    /** Device label, preferring the embedded asset over the flat columns. */
+    val deviceLabel: String?
+        get() = deviceName?.takeIf { it.isNotBlank() }
+            ?: networkAsset?.sysName?.takeIf { it.isNotBlank() }
+            ?: networkAsset?.itemId?.takeIf { it.isNotBlank() }
+
+    val deviceAddress: String?
+        get() = deviceIp?.takeIf { it.isNotBlank() }
+            ?: networkAsset?.ipAddress?.takeIf { it.isNotBlank() }
+
+    val branchLabel: String?
+        get() = branchName?.takeIf { it.isNotBlank() }
+            ?: networkAsset?.branchName?.takeIf { it.isNotBlank() }
 }
 
 @Serializable

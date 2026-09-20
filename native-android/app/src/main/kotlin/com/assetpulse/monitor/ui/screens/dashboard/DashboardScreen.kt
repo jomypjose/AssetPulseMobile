@@ -39,6 +39,7 @@ import com.assetpulse.monitor.data.local.OfflineCache
 import com.assetpulse.monitor.data.model.Device
 import com.assetpulse.monitor.ui.components.AppCard
 import com.assetpulse.monitor.ui.components.EmptyState
+import com.assetpulse.monitor.ui.components.LoadingState
 import com.assetpulse.monitor.ui.components.ErrorBanner
 import com.assetpulse.monitor.ui.components.SectionHeader
 import com.assetpulse.monitor.ui.components.StaleBanner
@@ -156,7 +157,9 @@ fun DashboardScreen(
             )
         }
 
-        if (state.recentDevices.isEmpty() && !state.isLoading) {
+        if (state.isLoading && state.devices.isEmpty()) {
+            item { LoadingState("Loading devices…") }
+        } else if (state.recentDevices.isEmpty()) {
             item {
                 EmptyState(
                     icon = Icons.Filled.Dns,
@@ -300,14 +303,20 @@ fun DeviceRow(device: Device, onClick: () -> Unit) {
                     color = colors.text,
                     maxLines = 1,
                 )
-                Text(
-                    text = listOfNotNull(device.ipAddress, device.sysLocation)
-                        .joinToString(" · ")
-                        .ifBlank { "No address" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textMuted,
-                    maxLines = 1,
-                )
+                // Many rows have no hostname, so displayName already *is* the
+                // IP; repeating it below (with a dangling separator) looked
+                // broken on device.
+                val subtitle = listOfNotNull(device.ipAddress, device.sysLocation)
+                    .filter { it.isNotBlank() && it != device.displayName }
+                    .joinToString(" · ")
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textMuted,
+                        maxLines = 1,
+                    )
+                }
             }
 
             Box(

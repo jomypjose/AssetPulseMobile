@@ -36,6 +36,7 @@ import com.assetpulse.monitor.ui.theme.AppTheme
 import com.assetpulse.monitor.ui.theme.Spacing
 import com.assetpulse.monitor.ui.util.PollIntervals
 import com.assetpulse.monitor.ui.util.PollingEffect
+import com.assetpulse.monitor.util.Dates
 
 @Composable
 fun DeviceDetailScreen(
@@ -155,8 +156,8 @@ fun DeviceDetailScreen(
                         InfoRow("Hostname", device?.hostname ?: "—")
                         InfoRow("System name", device?.sysName ?: "—")
                         InfoRow("Location", device?.sysLocation ?: "—")
-                        InfoRow("Uptime", formatUptime(device?.snmpUptime))
-                        InfoRow("Last seen", device?.lastSeen ?: "—")
+                        InfoRow("Uptime", device?.snmpUptime?.takeIf { it.isNotBlank() } ?: "—")
+                        InfoRow("Last seen", Dates.relative(device?.lastSeen))
                         device?.extra?.cpuCount?.let {
                             InfoRow("CPU cores", it.toString())
                         }
@@ -229,16 +230,3 @@ private fun gaugeColor(percent: Int?): Color {
     }
 }
 
-/** SNMP uptime arrives in hundredths of a second. */
-private fun formatUptime(ticks: Long?): String {
-    if (ticks == null || ticks <= 0) return "—"
-    val totalSeconds = ticks / 100
-    val days = totalSeconds / 86_400
-    val hours = (totalSeconds % 86_400) / 3_600
-    val minutes = (totalSeconds % 3_600) / 60
-    return when {
-        days > 0 -> "${days}d ${hours}h"
-        hours > 0 -> "${hours}h ${minutes}m"
-        else -> "${minutes}m"
-    }
-}

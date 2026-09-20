@@ -9,6 +9,7 @@ import com.assetpulse.monitor.data.repository.DeviceMetrics
 import com.assetpulse.monitor.data.repository.MonitoringRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,12 +40,18 @@ class DeviceDetailViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             try {
-                val deviceJob = async { repository.getDeviceDetail(deviceId) }
-                val metricsJob = async { repository.getDeviceMetrics(deviceId) }
+                // See DashboardViewModel: bare `async` children escalate a
+                // failure to the parent job and crash the process, so the
+                // parallel section is contained in a `coroutineScope`.
+                val (device, metrics) = coroutineScope {
+                    val deviceJob = async { repository.getDeviceDetail(deviceId) }
+                    val metricsJob = async { repository.getDeviceMetrics(deviceId) }
+                    deviceJob.await() to metricsJob.await()
+                }
                 _state.value = _state.value.copy(
                     isLoading = false,
-                    device = deviceJob.await(),
-                    metrics = metricsJob.await(),
+                    device = device,
+                    metrics = metrics,
                     error = null,
                 )
             } catch (e: Exception) {

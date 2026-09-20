@@ -40,6 +40,7 @@ import com.assetpulse.monitor.data.local.OfflineCache
 import com.assetpulse.monitor.data.model.Alert
 import com.assetpulse.monitor.ui.components.AppCard
 import com.assetpulse.monitor.ui.components.EmptyState
+import com.assetpulse.monitor.ui.components.LoadingState
 import com.assetpulse.monitor.ui.components.ErrorBanner
 import com.assetpulse.monitor.ui.components.StaleBanner
 import com.assetpulse.monitor.ui.components.severityPalette
@@ -137,7 +138,9 @@ fun AlertsScreen(viewModel: AlertsViewModel = hiltViewModel()) {
             }
 
             val visible = state.visibleAlerts
-            if (visible.isEmpty() && !state.isLoading) {
+            if (state.isLoading && state.alerts.isEmpty()) {
+                item { LoadingState("Loading alerts…") }
+            } else if (visible.isEmpty()) {
                 item {
                     EmptyState(
                         icon = Icons.Filled.NotificationsNone,
@@ -237,10 +240,10 @@ private fun AlertCard(
             )
 
             val subtitle = listOfNotNull(
-                alert.deviceName ?: alert.networkAsset,
-                alert.deviceIp,
-                alert.branchName,
-            ).joinToString(" · ")
+                alert.deviceLabel,
+                alert.deviceAddress,
+                alert.branchLabel,
+            ).filter { it.isNotBlank() }.distinct().joinToString(" · ")
 
             if (subtitle.isNotBlank()) {
                 Text(

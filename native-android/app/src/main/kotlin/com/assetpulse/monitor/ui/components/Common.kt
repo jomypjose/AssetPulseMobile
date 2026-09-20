@@ -130,6 +130,34 @@ fun StaleBanner(staleLabel: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Shown while a list is fetching for the first time. The device list is a
+ * ~1.7MB payload over a branch connection, so without this the tab sits
+ * blank for several seconds with no sign that anything is happening.
+ */
+@Composable
+fun LoadingState(label: String = "Loading…", modifier: Modifier = Modifier) {
+    val colors = AppTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(Spacing.xxxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        androidx.compose.material3.CircularProgressIndicator(
+            modifier = Modifier.size(28.dp),
+            color = colors.primary,
+            strokeWidth = 3.dp,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textMuted,
+        )
+    }
+}
+
 @Composable
 fun EmptyState(
     icon: ImageVector,
