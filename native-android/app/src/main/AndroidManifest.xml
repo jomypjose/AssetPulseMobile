@@ -10,6 +10,14 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Background asset tracking. BACKGROUND_LOCATION is what lets the
+         foreground service keep reporting once the app is not in view; it is
+         requested separately at runtime and only after the user opts in. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -41,5 +49,22 @@
                 <data android:scheme="assetpulse" />
             </intent-filter>
         </activity>
+
+        <!-- Reports this device's location and health to /tracking/agent/ping -->
+        <service
+            android:name=".tracking.LocationTrackingService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+
+        <!-- Resumes tracking after a reboot, if it was enrolled -->
+        <receiver
+            android:name=".tracking.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

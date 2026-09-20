@@ -59,7 +59,11 @@ fun AppNavHost(
         }
 
         composable(Routes.MAIN) {
-            MainShell(user = session.user)
+            MainShell(
+                user = session.user,
+                serverUrl = session.serverUrl,
+                onSignOut = onSignOut,
+            )
         }
     }
 }

@@ -104,6 +104,9 @@ dependencies {
     // Biometrics
     implementation("androidx.biometric:biometric:1.1.0")
 
+    // Background asset tracking (agent/mobile module)
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

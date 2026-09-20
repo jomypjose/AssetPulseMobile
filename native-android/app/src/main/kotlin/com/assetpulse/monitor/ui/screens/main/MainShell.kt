@@ -34,6 +34,8 @@ import com.assetpulse.monitor.ui.screens.alerts.AlertsScreen
 import com.assetpulse.monitor.ui.screens.dashboard.DashboardScreen
 import com.assetpulse.monitor.ui.screens.devices.DeviceDetailScreen
 import com.assetpulse.monitor.ui.screens.devices.DevicesScreen
+import com.assetpulse.monitor.ui.screens.profile.ProfileScreen
+import com.assetpulse.monitor.ui.screens.tracking.TrackingScreen
 import com.assetpulse.monitor.ui.theme.Chrome
 import com.assetpulse.monitor.ui.util.PollIntervals
 import com.assetpulse.monitor.ui.util.PollingEffect
@@ -61,6 +63,8 @@ private val TABS = listOf(
 @Composable
 fun MainShell(
     user: User?,
+    serverUrl: String?,
+    onSignOut: () -> Unit,
     badgeViewModel: BadgeViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
@@ -144,7 +148,19 @@ fun MainShell(
             composable(Routes.ALERTS) { AlertsScreen() }
 
             composable(Routes.MESSAGES) { PlaceholderScreen("Messages", "Phase 4") }
-            composable(Routes.PROFILE) { PlaceholderScreen("Profile", "Phase 5") }
+
+            composable(Routes.PROFILE) {
+                ProfileScreen(
+                    user = user,
+                    serverUrl = serverUrl,
+                    onOpenTracking = { navController.navigate(Routes.TRACKING) },
+                    onSignOut = onSignOut,
+                )
+            }
+
+            composable(Routes.TRACKING) {
+                TrackingScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

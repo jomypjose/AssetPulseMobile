@@ -44,6 +44,7 @@ object Routes {
     const val SEARCH = "search"
     const val MAP = "map"
     const val EXPIRY = "expiry"
+    const val TRACKING = "tracking"
     const val TICKETS = "tickets"
     const val DAILY_JOBS = "daily-jobs"
 

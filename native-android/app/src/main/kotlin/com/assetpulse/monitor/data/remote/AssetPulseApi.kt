@@ -1,15 +1,18 @@
 package com.assetpulse.monitor.data.remote
 
 import com.assetpulse.monitor.data.model.AcknowledgeRequest
+import com.assetpulse.monitor.data.model.AgentTokenResponse
 import com.assetpulse.monitor.data.model.AlertsResponse
 import com.assetpulse.monitor.data.model.DashboardStats
 import com.assetpulse.monitor.data.model.DeviceDetailResponse
 import com.assetpulse.monitor.data.model.DeviceListResponse
+import com.assetpulse.monitor.data.model.HardwareListResponse
 import com.assetpulse.monitor.data.model.LoginRequest
 import com.assetpulse.monitor.data.model.LoginResponse
 import com.assetpulse.monitor.data.model.LogoutRequest
 import com.assetpulse.monitor.data.model.MaintenanceRequest
 import com.assetpulse.monitor.data.model.ProfileResponse
+import com.assetpulse.monitor.data.model.ToggleTrackingRequest
 import com.assetpulse.monitor.data.model.PushTokenRequest
 import kotlinx.serialization.json.JsonElement
 import retrofit2.http.Body
@@ -88,4 +91,30 @@ interface AssetPulseApi {
 
     @PATCH("/alerts/{id}/resolve")
     suspend fun resolveAlert(@Path("id") id: Int)
+
+    // ── Hardware (asset lookup for tracking enrollment) ───────────────────
+    @GET("/hardware")
+    suspend fun searchHardware(
+        @Query("search") search: String?,
+        @Query("limit") limit: Int = 25,
+    ): HardwareListResponse
+
+    // ── Asset tracking ────────────────────────────────────────────────────
+    /**
+     * Turns tracking on for an asset. Must succeed before a token is issued,
+     * because the server only surfaces tracking-enabled assets on the map.
+     */
+    @POST("/tracking/assets/{id}/toggle")
+    suspend fun toggleAssetTracking(
+        @Path("id") id: Int,
+        @Body body: ToggleTrackingRequest,
+    )
+
+    /**
+     * Issues (or resets) the agent token this device pings with. Requires
+     * hardware write access, so a read-only account gets a 403 here and has
+     * to be given a token out of band.
+     */
+    @POST("/tracking/assets/{id}/token")
+    suspend fun generateAgentToken(@Path("id") id: Int): AgentTokenResponse
 }
