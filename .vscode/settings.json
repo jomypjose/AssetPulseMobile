@@ -10,7 +10,6 @@
   // the library's git repo, not in the npm package. Result:
   //   "Error getting build for .../react-native-screens/android"
   //
-  // An explicit array here bypasses the workspace scan entirely. Both real
-  // Gradle roots are listed: the Expo-generated one and the native rewrite.
-  "gradle.nestedProjects": ["android", "native-android"]
+  // An explicit array here bypasses the workspace scan entirely.
+  "gradle.nestedProjects": ["android"]
 }
