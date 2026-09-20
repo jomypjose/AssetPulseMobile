@@ -1,0 +1,15 @@
+{
+  // This repo's only Gradle build lives in `android/`. Because the workspace
+  // root has no build.gradle/settings.gradle, the Gradle for Java extension
+  // otherwise falls back to globbing `**/build.gradle` across the whole
+  // workspace -- which picks up ~34 Expo/RN library builds under node_modules
+  // and tries to configure each one as a standalone root project.
+  //
+  // That fails noisily for react-native-screens: its build.gradle applies
+  // `spotless.gradle` when it is the root project, and that file ships only in
+  // the library's git repo, not in the npm package. Result:
+  //   "Error getting build for .../react-native-screens/android"
+  //
+  // An explicit array here bypasses the workspace scan entirely.
+  "gradle.nestedProjects": ["android"]
+}
