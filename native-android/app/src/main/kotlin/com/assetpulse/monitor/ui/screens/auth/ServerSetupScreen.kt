@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.assetpulse.monitor.BuildConfig
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.assetpulse.monitor.ui.theme.AppTheme
 import com.assetpulse.monitor.ui.theme.Shapes
@@ -206,7 +207,13 @@ fun ServerSetupScreen(
             Spacer(Modifier.height(Spacing.xl))
 
             Text(
-                text = "Connections always use HTTPS.",
+                // Debug builds honour a typed http:// so local dev servers are
+                // reachable, so the blanket claim would be untrue there.
+                text = if (BuildConfig.DEBUG) {
+                    "Addresses use HTTPS unless you type http:// (debug build)."
+                } else {
+                    "Connections always use HTTPS."
+                },
                 style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
                 color = colors.textMuted,
                 textAlign = TextAlign.Center,
