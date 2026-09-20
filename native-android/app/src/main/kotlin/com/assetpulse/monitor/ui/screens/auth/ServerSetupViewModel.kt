@@ -55,6 +55,8 @@ class ServerSetupViewModel @Inject constructor(
             resolvedUrl = url,
             // Tell the user we rewrote their http:// address rather than
             // silently connecting somewhere they didn't type.
+            // Only shown when cleartext was actually rewritten, i.e. release
+            // builds. Debug builds keep http:// so local servers work.
             message = if (ServerUrl.wasPlaintext(raw)) {
                 "Upgraded to HTTPS — plain HTTP isn't supported."
             } else "",

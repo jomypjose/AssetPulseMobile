@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG ONLY. Overrides the main source set's config, which refuses cleartext.
+
+  Local development servers are plain HTTP (the AssetPulse API dev server runs
+  on :3001 with no TLS), so a debug build has to be allowed to reach them.
+  Release builds keep the strict config in src/main and still refuse cleartext,
+  which is what protects credentials in the field.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
